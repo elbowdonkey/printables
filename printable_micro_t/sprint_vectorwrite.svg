@@ -1,0 +1,540 @@
+<?xml version='1.0' standalone='no'?>
+<!--Written in KDevelop (http://www.kdevelop.org/)-->
+<svg baseProfile='full' contentScriptType='text/ecmascript' contentStyleType='text/css' height='780.0px' onload='init()' preserveAspectRatio='xMidYMid meet' version='1.0' width='516.0px' xmlns='http://www.w3.org/2000/svg' xmlns:inkscape='http://www.inkscape.org/namespaces/inkscape' xmlns:slice='http://www.reprap.org/slice' xmlns:xlink='http://www.w3.org/1999/xlink' zoomAndPan='magnify'>
+	<metadata>
+		<slice:layers id='sliceData' controlBoxHeight='720' controlBoxWidth='240' decimalPlacesCarried='3' edgeWidth='0.4' layerHeight='0.27' margin='20' marginTop='60' maxX='44.433' maxY='6.474' maxZ='1.685' minX='-44.451' minY='-6.474' minZ='0.335' procedureName='vectorwrite' svgMinWidth='516' template='svg_layer' textHeight='22.5' unitScale='3.7' version='0.1' yAxisPointingUpward='true' />
+	</metadata>
+	<script type='text/ecmascript'>
+<![CDATA[
+globalMetadata = document.getElementsByTagNameNS('http://www.reprap.org/slice', 'layers')[0];
+globalSliceMinX = globalMetadata.getAttribute('minX') * 1;
+globalSliceMaxX = globalMetadata.getAttribute('maxX') * 1;
+globalSliceMinY = globalMetadata.getAttribute('minY') * 1;
+globalSliceMaxY = globalMetadata.getAttribute('maxY') * 1;
+globalSliceMinZ = globalMetadata.getAttribute('minZ') * 1;
+globalSliceMaxZ = globalMetadata.getAttribute('maxZ') * 1;
+
+//Control var's
+globalLayerIndex = 0; //Number of currently viewed layer (zero index)
+globalLatitude = 60.0;
+globalLongitude = 45.0;
+globalControlBoxHeight = globalMetadata.getAttribute('controlBoxHeight') * 1;
+globalControlBoxWidth = globalMetadata.getAttribute('controlBoxWidth') * 1;
+globalSliding = false;
+globalObserving = false
+
+//Display var's
+globalMargin = globalMetadata.getAttribute('margin') * 1;
+globalMarginTop = globalMetadata.getAttribute('marginTop') * 1;
+globalDimensionX = globalSliceMaxX - globalSliceMinX;
+globalDimensionY = globalSliceMaxY - globalSliceMinY;
+globalDimensionZ = globalSliceMaxZ - globalSliceMinZ;
+magnitudeXYSquared = globalDimensionX * globalDimensionX + globalDimensionY * globalDimensionY;
+globalDimensionMagnitude = Math.sqrt(magnitudeXYSquared + globalDimensionZ * globalDimensionZ);
+globalGlobeTravelRadian = 0.0;
+globalGlobeInnerObserverRadius = 0.0;
+globalTextHeight = globalMetadata.getAttribute('textHeight') * 1.0;
+globalUnitScale = globalMetadata.getAttribute('unitScale') * 1.0;
+globalXOffset = globalControlBoxWidth + globalMargin + globalMargin;
+globalYOffset = globalMargin + globalMarginTop;
+globalZoomScale = 1.0; //Default 1:1 may need smaller scale for large objects
+globalScale = globalUnitScale * globalZoomScale;
+
+//Globals to be set in init
+globalLayers = [];
+globalSlider = 0;
+globalThumb = 0;
+globalThumbRadius = 0.0;
+globalSliderWidthMinusDiameter = 0.0;
+
+
+function changeScale(newScale) {
+	globalZoomScale = newScale;
+	globalScale = globalUnitScale * globalZoomScale;
+	if (globalZoomScale >=1) { //dont scale line thickness for large display scale
+		document.getElementById('layerData').setAttributeNS(null, 'stroke-width', 2.0 / (globalScale));
+	}
+}
+
+function changeScaleIso(newScale) {
+	changeScale(newScale);
+	viewIso();
+}
+
+function changeScaleLayer(newScale) {
+	changeScale(newScale);
+	viewLayer();
+}
+
+function changeScaleScroll(newScale) {
+	changeScale(newScale);
+	viewScroll();
+}
+
+function displayIso(latitude, longitude) {
+	latitude = Math.max(0.0, latitude);
+	latitude = Math.min(89.0, latitude);
+	globalLatitude = Math.round(latitude);
+	globalLongitude = Math.round((longitude + 540.0) % 360.0) - 180.0;
+	latitudeRadians = getRadians(globalLatitude);
+	longitudeWiddershinsRadians = getRadians(90.0 - globalLongitude);
+	unitX = Math.cos(longitudeWiddershinsRadians);
+	unitY = Math.sin(longitudeWiddershinsRadians);
+	latitudeOverLayers = globalDimensionZ / globalLayers.length;
+	globalOneOverUnitScaleString = (1.0 / globalUnitScale).toString();
+	yScale = -1.0 * globalScale * Math.cos(latitudeRadians);
+	scaleRotateCenterString = ' scale(' + globalScale + ', ' + yScale + ')';
+	scaleRotateCenterString += ' rotate(' + (-1.0 * globalLongitude).toString() + ')';
+	centerX = (-0.5 * globalDimensionX - globalSliceMinX).toString();
+	centerY = (-0.5 * globalDimensionY - globalSliceMinY).toString();
+	scaleRotateCenterString += ' translate(' + centerX + ', ' + centerY + ')';
+	x = 0.5 * globalDimensionMagnitude * globalScale + globalXOffset;
+	halfLengthMinusOne = 0.5 * (globalLayers.length - 1);
+	for (var i in globalLayers) {
+		latitudeZSin = Math.sin(latitudeRadians) * (i - halfLengthMinusOne) * latitudeOverLayers
+		y = globalScale * (0.5 * globalDimensionMagnitude - latitudeZSin) + globalYOffset;
+//		y = globalDimensionY * globalScale + globalYOffset - i * unitY * latitudeOverLayers;
+		transformString = ' translate(' + x + ', ' + y + ')';
+		globalLayers[i].setAttributeNS(null, 'transform', transformString + scaleRotateCenterString);
+	}
+	setText('latitudeIso', 'Latitude: ' + globalLatitude.toString() + '°');
+	setText('longitudeIso', 'Longitude: ' + globalLongitude.toString() + '°');
+	globeMoveableRadius = globalGlobeTravelRadian * latitudeRadians + globalGlobeInnerObserverRadius;
+	globalObserver.setAttribute('cx', globalGlobeCenterX + unitX * globeMoveableRadius);
+	globalObserver.setAttribute('cy', globalGlobeCenterY - unitY * globeMoveableRadius);
+}
+
+function displayIsoByLatitude(latitude) {
+	displayIso(latitude, globalLongitude);
+}
+
+function displayIsoByLongitude(longitude) {
+	displayIso(globalLatitude, longitude);
+}
+
+function displayLayer(layerNum) {
+	if (globalLayers.length <= 1) {
+		document.getElementById('maxIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		document.getElementById('minIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		globalSlider.setAttributeNS(null, 'visibility', 'hidden');
+		globalThumb.setAttributeNS(null, 'visibility', 'hidden');
+	}
+	if (layerNum <= 0) {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum >= globalLayers.length - 1) {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum < 0 || layerNum >= globalLayers.length) {
+		return
+	}
+	globalLayers[globalLayerIndex].setAttributeNS(null, 'visibility', 'hidden');
+	currentLayerElement = globalLayers[layerNum]
+	currentLayerElement.setAttributeNS(null, 'visibility', 'visible');
+	globalLayerIndex = layerNum;
+	setText('currentIndexLayer', 'Layer: ' + globalLayerIndex.toString() + ', ' + currentLayerElement.getAttribute('id'));
+	//Slider
+	if (!globalSliding) {
+		placeThumb(globalSliderWidthMinusDiameter / (globalLayers.length - 1) * globalLayerIndex + globalThumbRadius);
+	}
+}
+
+function getDegrees(radians) {
+	return radians / Math.PI * 180.0;
+}
+
+function getRadians(degrees) {
+	return degrees / 180.0 * Math.PI;
+}
+
+function getScaleTransformString(scale) {
+	scaleTransformString = 'scale(' + scale + ' ' + (scale * - 1)
+	return scaleTransformString + ') translate(' + (globalSliceMinX * - 1) + ' ' + (globalSliceMinY * - 1) + ')';
+}
+
+function getWidth() {
+	return (globalDimensionX * globalScale) + globalXOffset
+}
+
+function hideElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'hidden');
+	}
+}
+
+function init() {
+	//Find only layer groups
+	globe = document.getElementById('globe');
+	globalGlobeCenterX = globe.getAttribute('cx') * 1;
+	globalGlobeCenterXWindow = globalGlobeCenterX + globalMargin;
+	globalGlobeCenterY = globe.getAttribute('cy') * 1;
+	globalGlobeCenterYWindow = globalGlobeCenterX + globalMarginTop;
+	globalObserver = document.getElementById('observer');
+	globeRadius = globe.getAttribute('r') * 1.0;
+	observerRadius = globalObserver.getAttribute('r') * 1.0;
+	globalGlobeInnerObserverRadius = document.getElementById('cover').getAttribute('r') * 1.0 + observerRadius;
+	globalGlobeTravelRadian = getDegrees(globeRadius - globalGlobeInnerObserverRadius - observerRadius) / 89.0;
+	globalSlider = document.getElementById('slider');
+	globalSliderX = globalSlider.getAttribute('x') * 1;
+	globalSliderXWindow = globalSliderX + globalMargin
+	globalThumb = document.getElementById('thumb');
+	globalThumbRadius = globalThumb.getAttribute('r') * 1;
+	globalSliderWidthMinusRadius = globalSlider.getAttribute('width') * 1 - globalThumbRadius;
+	globalSliderWidthMinusDiameter = globalSliderWidthMinusRadius - globalThumbRadius;
+	var allGroups = document.getElementsByTagName('g');
+	for (var i = 0; i < allGroups.length; i++) {
+		if (allGroups[i].id.indexOf('z:') == 0) {
+			globalLayers.push(allGroups[i]);
+		}
+	}
+
+	//Slider
+	layerControlBox = document.getElementById('layerControlBox');
+	layerControlBox.addEventListener('mouseup', sliderUp, false);
+	layerControlBox.addEventListener('mousemove', sliderMove, false);
+	globalSlider.addEventListener('mousedown', sliderDownMove, false);
+	globalThumb.addEventListener('mousedown', sliderDownMove, false);
+	//Observer
+	isoControlBox = document.getElementById('isoControlBox');
+	isoControlBox.addEventListener('mouseup', observerUp, false);
+	isoControlBox.addEventListener('mousemove', observerMove, false);
+	globe.addEventListener('mousedown', observerDownMove, false);
+	globalObserver.addEventListener('mousedown', observerDownMove, false);
+	
+	//Control box data
+	setText('maxIndexLayer', globalLayers.length - 1);
+	changeScaleLayer(globalZoomScale);
+}
+
+function observerDown(event) {
+	globalObserving = true;
+}
+
+function observerDownMove(event) {
+	globalObserving = true;
+	observerMove(event);
+}
+
+function observerMove(event) {
+	if (!globalObserving) {
+		return;
+	}
+	observerX = event.clientX - globalGlobeCenterXWindow + window.pageXOffset;
+	observerY = event.clientY - globalGlobeCenterYWindow + window.pageYOffset;
+	distanceFromCenter = Math.sqrt(observerX * observerX + observerY * observerY);
+	latitudeRadians = (distanceFromCenter - globalGlobeInnerObserverRadius) / globalGlobeTravelRadian;
+	longitudeRadians = Math.atan2(observerX, -observerY);
+	displayIso(getDegrees(latitudeRadians), getDegrees(longitudeRadians));
+}
+
+function observerUp(event) {
+	globalObserving = false;
+}
+
+function placeThumb(value) {
+	if (globalLayers.length > 1) {
+		globalThumb.setAttribute('cx', globalSliderX + value);
+	}
+}
+
+function setScaleText(scaleID) {
+	setText(scaleID, ': ' + globalZoomScale);
+}
+
+function setSVG(width, height) {
+	rootSVG = document.getElementsByTagName('svg')[0];
+	svgMinWidth = globalMetadata.getAttribute('svgMinWidth') * 1;
+	height = Math.max(globalControlBoxHeight + globalMargin + globalMarginTop, height);
+	width = Math.max(svgMinWidth, width);
+	rootSVG.setAttributeNS(null, 'width', width + 'px')
+	rootSVG.setAttributeNS(null, 'height', height + 'px')
+}
+
+function setText(id, str) {
+	e = document.getElementById(id)
+	if (e != null)
+		e.firstChild.nodeValue = str;
+}
+
+function showElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'visible');
+	}
+}
+
+function sliderDown(event) {
+	globalSliding = true;
+}
+
+function sliderDownMove(event) {
+	globalSliding = true;
+	sliderMove(event);
+}
+
+function sliderMove(event) {
+	if (!globalSliding) {
+		return;
+	}
+	value = event.clientX - globalSliderXWindow + window.pageXOffset;
+	if (value >= globalThumbRadius && value <= globalSliderWidthMinusRadius) {
+		placeThumb(value);
+		zoneWidth = globalSliderWidthMinusDiameter / (globalLayers.length);
+		newLayer = Math.round((value - globalThumbRadius - 0.5 * zoneWidth) / zoneWidth)
+		if (newLayer != globalLayerIndex) {
+			displayLayer(newLayer)
+		}
+	}
+}
+
+function sliderUp(event) {
+	globalSliding = false;
+}
+
+function viewIso() {
+	height = (globalDimensionMagnitude * globalScale) + globalYOffset;
+	setSVG((globalDimensionMagnitude * globalScale) + globalXOffset, height);
+	for (var i in globalLayers) {
+//		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalMargin + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			  pathElements[pathElementIndex].setAttributeNS(null, 'transform', '');
+		  }
+	  }
+	  //show control box
+	hideElements(['decreaseLayerIndex', 'increaseLayerIndex', 'isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollControlBox', 'scrollViewLabel']);
+	showElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollViewButton']);
+	displayIso(globalLatitude, globalLongitude);
+	setScaleText('scaleIso');
+}
+
+function viewLayer() {
+	//Set svg size and view port
+	height = (globalDimensionY * globalScale) + globalYOffset;
+	setSVG(getWidth(), height);
+	//move and hide all layers 
+	for (var i in globalLayers) {
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalXOffset + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'hidden');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		transform = getScaleTransformString(globalScale);
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	showElements(['isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	
+	//show current layer
+	displayLayer(globalLayerIndex);
+	setScaleText('scaleLayer');
+}
+
+function viewScroll() {
+	//Set svg size and view port
+	yDimensionScale = globalDimensionY * globalScale
+	singleHeight = (globalMargin + yDimensionScale + globalTextHeight)
+	height = globalLayers.length * singleHeight + globalMargin + globalMargin + globalYOffset;
+	setSVG(getWidth(), height);
+
+	//move and show all layers 
+	for (var i in globalLayers) {
+		x = globalXOffset;
+		y = i * singleHeight + yDimensionScale + globalYOffset;
+		transform = getScaleTransformString(globalScale);
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + x + ', ' + y + ')');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'visible');
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	showElements(['isoViewButton', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	setScaleText('scaleScroll');
+}
+	]]>
+	</script>
+	<title >sprint.gcode - Slice Layers</title>
+<!--Begin Layer Data   -->
+	<g id='layerData' fill='#556B2F' fill-rule='evenodd' font-family='Arial' font-size='15px' font-weight='bold' inkscape:groupmode='layer' inkscape:label='Slice Layers' stroke='#00F' stroke-width='0.54px'>
+<!--id='sliceElementTemplate' must be there or else the slice template will not be found-->
+		<g id='z:0.47' inkscape:groupmode='layer' inkscape:label='Layer 0, z:0.47' transform='translate(280.0, 127.908)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.47' fill='#000' stroke='none' y='15' >Layer 0, z:0.47</text>
+			<path d='M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -23.216 3.293 L -19.501 3.242 L -15.961 2.986 L -13.555 2.67 L -10.842 2.103 L -9.746 1.768 L -8.847 1.405 L -8.161 1.02 L -7.901 0.821 L -7.697 0.618 L -7.551 0.414 L -7.463 0.207 L -7.434 0.0 L -7.463 -0.207 L -7.551 -0.414 L -7.697 -0.618 L -7.901 -0.821 L -8.161 -1.02 L -8.847 -1.405 L -9.746 -1.768 L -10.842 -2.103 L -13.555 -2.67 L -15.961 -2.986 L -19.501 -3.242 L -23.216 -3.293 L -26.873 -3.138 L -30.241 -2.786 L -31.75 -2.543 L -34.298 -1.94 L -35.297 -1.59 L -36.091 -1.215 L -36.667 -0.821 L -36.871 -0.618 L -37.017 -0.414 L -37.105 -0.207 L -37.134 0.0 L -37.105 0.207 L -37.017 0.414 L -36.871 0.618 L -36.667 0.821 L -36.091 1.215 L -35.297 1.59 L -34.298 1.94 L -31.75 2.543 L -30.241 2.786 L -26.873 3.138 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.208 0.452 L -40.083 0.543 L -39.938 0.601 L -39.784 0.62 L -39.63 0.601 L -39.485 0.543 L -39.36 0.452 L -39.261 0.332 L -39.194 0.192 L -39.165 0.039 L -39.175 -0.116 L -39.223 -0.264 L -39.306 -0.395 L -39.42 -0.502 L -39.556 -0.576 L -39.706 -0.615 L -39.862 -0.615 L -40.012 -0.576 L -40.148 -0.502 L -40.262 -0.395 L -40.345 -0.264 L -40.393 -0.116 L -40.403 0.039 L -40.374 0.192 L -40.307 0.332 z M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 21.366 3.293 L 25.081 3.242 L 28.621 2.986 L 31.027 2.67 L 33.74 2.103 L 34.836 1.768 L 35.735 1.405 L 36.421 1.02 L 36.681 0.821 L 36.885 0.618 L 37.031 0.414 L 37.119 0.207 L 37.148 0.0 L 37.119 -0.207 L 37.031 -0.414 L 36.885 -0.618 L 36.681 -0.821 L 36.421 -1.02 L 35.735 -1.405 L 34.836 -1.768 L 33.74 -2.103 L 31.027 -2.67 L 28.621 -2.986 L 25.081 -3.242 L 21.366 -3.293 L 17.709 -3.138 L 14.341 -2.786 L 12.832 -2.543 L 10.284 -1.94 L 9.285 -1.59 L 8.491 -1.215 L 7.915 -0.821 L 7.711 -0.618 L 7.565 -0.414 L 7.477 -0.207 L 7.448 0.0 L 7.477 0.207 L 7.565 0.414 L 7.711 0.618 L 7.915 0.821 L 8.491 1.215 L 9.285 1.59 L 10.284 1.94 L 12.832 2.543 L 14.341 2.786 L 17.709 3.138 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.374 0.452 L 4.499 0.543 L 4.644 0.601 L 4.798 0.62 L 4.952 0.601 L 5.097 0.543 L 5.222 0.452 L 5.321 0.332 L 5.388 0.192 L 5.417 0.039 L 5.407 -0.116 L 5.359 -0.264 L 5.276 -0.395 L 5.162 -0.502 L 5.026 -0.576 L 4.876 -0.615 L 4.72 -0.615 L 4.57 -0.576 L 4.434 -0.502 L 4.32 -0.395 L 4.237 -0.264 L 4.189 -0.116 L 4.179 0.039 L 4.208 0.192 L 4.275 0.332 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -21.436 3.469 L -21.43 3.469 L -19.492 3.442 L -15.941 3.185 L -13.521 2.867 L -10.792 2.297 L -9.679 1.957 L -8.76 1.586 L -8.051 1.187 L -7.769 0.972 L -7.544 0.748 L -7.376 0.513 L -7.269 0.261 L -7.232 0.0 L -7.269 -0.261 L -7.376 -0.513 L -7.544 -0.748 L -7.769 -0.972 L -8.051 -1.187 L -8.76 -1.586 L -9.679 -1.957 L -10.792 -2.297 L -13.521 -2.867 L -15.941 -3.185 L -19.492 -3.442 L -23.219 -3.493 L -26.888 -3.338 L -30.267 -2.984 L -31.789 -2.739 L -34.354 -2.132 L -35.373 -1.775 L -36.191 -1.389 L -36.795 -0.976 L -37.024 -0.748 L -37.192 -0.513 L -37.299 -0.261 L -37.336 0.0 L -37.299 0.261 L -37.192 0.513 L -37.024 0.748 L -36.795 0.976 L -36.191 1.389 L -35.373 1.775 L -34.354 2.132 L -31.789 2.739 L -30.267 2.984 L -26.888 3.338 L -23.219 3.493 L -21.436 3.469 L -21.436 3.469 L -21.436 3.469 L -21.436 3.469 M -5.567 0.25 L -5.566 0.255 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.567 0.25 L -5.567 0.25 L -5.567 0.25 L -5.567 0.25 M -38.965 0.056 L -38.964 0.051 L -38.977 -0.154 L -39.041 -0.35 L -39.151 -0.523 L -39.302 -0.665 L -39.482 -0.763 L -39.68 -0.815 L -39.888 -0.815 L -40.086 -0.763 L -40.266 -0.665 L -40.417 -0.523 L -40.527 -0.35 L -40.591 -0.154 L -40.604 0.051 L -40.566 0.255 L -40.477 0.44 L -40.346 0.599 L -40.18 0.719 L -39.988 0.796 L -39.784 0.822 L -39.58 0.796 L -39.388 0.719 L -39.222 0.599 L -39.091 0.44 L -39.002 0.255 L -38.965 0.056 L -38.965 0.056 L -38.965 0.056 L -38.965 0.056 M 23.146 3.469 L 23.152 3.469 L 25.09 3.442 L 28.641 3.185 L 31.061 2.867 L 33.79 2.297 L 34.903 1.957 L 35.822 1.586 L 36.531 1.187 L 36.813 0.972 L 37.038 0.748 L 37.206 0.513 L 37.313 0.261 L 37.35 0.0 L 37.313 -0.261 L 37.206 -0.513 L 37.038 -0.748 L 36.813 -0.972 L 36.531 -1.187 L 35.822 -1.586 L 34.903 -1.957 L 33.79 -2.297 L 31.061 -2.867 L 28.641 -3.185 L 25.09 -3.442 L 21.363 -3.493 L 17.694 -3.338 L 14.315 -2.984 L 12.793 -2.739 L 10.228 -2.132 L 9.209 -1.775 L 8.391 -1.389 L 7.787 -0.976 L 7.558 -0.748 L 7.39 -0.513 L 7.283 -0.261 L 7.246 0.0 L 7.283 0.261 L 7.39 0.513 L 7.558 0.748 L 7.787 0.976 L 8.391 1.389 L 9.209 1.775 L 10.228 2.132 L 12.793 2.739 L 14.315 2.984 L 17.694 3.338 L 21.363 3.493 L 23.146 3.469 L 23.146 3.469 L 23.146 3.469 L 23.146 3.469 M 39.015 0.25 L 39.016 0.255 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 39.015 0.25 L 39.015 0.25 L 39.015 0.25 L 39.015 0.25 M 5.617 0.056 L 5.618 0.051 L 5.605 -0.154 L 5.541 -0.35 L 5.431 -0.523 L 5.28 -0.665 L 5.1 -0.763 L 4.902 -0.815 L 4.694 -0.815 L 4.496 -0.763 L 4.316 -0.665 L 4.165 -0.523 L 4.055 -0.35 L 3.991 -0.154 L 3.978 0.051 L 4.016 0.255 L 4.105 0.44 L 4.236 0.599 L 4.402 0.719 L 4.594 0.796 L 4.798 0.822 L 5.002 0.796 L 5.194 0.719 L 5.36 0.599 L 5.491 0.44 L 5.58 0.255 L 5.617 0.056 L 5.617 0.056 L 5.617 0.056 L 5.617 0.056' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -44.451 0.0 L -44.031 1.843 L -43.131 3.196 L -42.167 3.946 L -41.092 4.449 L -36.668 5.103 L -26.944 6.468 L 17.838 6.474 L 30.302 6.2 L 40.106 4.611 L 41.266 4.366 L 42.502 3.745 L 43.466 2.812 L 44.09 1.724 L 44.433 0.0 L 44.09 -1.724 L 43.466 -2.812 L 42.502 -3.745 L 41.266 -4.366 L 40.106 -4.611 L 30.302 -6.2 L 17.838 -6.474 L -26.944 -6.468 L -36.668 -5.103 L -41.092 -4.449 L -42.167 -3.946 L -43.131 -3.196 L -44.031 -1.843 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 M -24.974 3.699 L -26.749 3.674 L -31.903 3.179 L -33.72 2.885 L -36.1 2.357 L -37.986 1.74 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -37.986 -1.74 L -36.1 -2.357 L -33.72 -2.885 L -31.903 -3.179 L -26.749 -3.674 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 M -21.426 -3.748 L -20.033 -3.768 L -14.64 -3.42 L -10.846 -2.885 L -8.466 -2.356 L -7.154 -1.955 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -7.154 1.955 L -8.466 2.356 L -10.846 2.885 L -14.64 3.42 L -20.033 3.768 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 M -33.891 -2.556 L -33.87 -2.535 L -34.327 -2.426 L -34.354 -2.454 L -34.755 -2.289 L -34.818 -2.352 L -35.174 -2.142 L -35.282 -2.25 L -35.583 -1.986 L -35.746 -2.148 L -35.968 -1.804 L -36.195 -2.031 L -36.349 -1.62 L -36.621 -1.892 L -37.047 -1.753 L -36.685 -1.39 L -37.014 -1.153 L -37.474 -1.613 L -37.899 -1.472 L -37.287 -0.861 L -37.499 -0.507 L -38.289 -1.298 L -38.68 -1.123 L -37.611 -0.054 L -37.351 0.773 L -39.62 -1.497 L -39.784 -1.095 L -40.15 -1.461 L -40.555 -1.3 L -40.248 -0.994 L -40.577 -0.757 L -40.872 -1.052 L -41.114 -0.728 L -40.801 -0.415 L -41.261 -0.309 L -40.886 0.066 L -41.269 0.249 L -40.034 1.484 L -39.857 1.095 L -39.471 1.48 L -39.057 1.328 L -39.371 1.015 L -39.023 0.797 L -38.698 1.122 L -38.792 0.463 L -37.723 1.532 L -36.882 1.806 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 M -36.837 1.286 L -36.042 2.081 L -35.562 1.996 L -35.315 2.243 L -34.675 2.316 L -34.59 2.402 L -33.898 2.528 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 M -10.69 2.543 L -10.665 2.568 L -10.252 2.415 L -10.204 2.463 L -9.814 2.288 L -9.743 2.359 L -9.393 2.143 L -9.282 2.254 L -8.99 1.98 L -8.821 2.15 L -8.592 1.812 L -8.37 2.034 L -8.23 1.609 L -7.937 1.902 L -7.504 1.769 L -7.871 1.402 L -7.554 1.153 L -7.084 1.623 L -6.684 1.458 L -7.281 0.861 L -7.069 0.507 L -6.283 1.293 L -5.882 1.128 L -6.957 0.054 L -7.217 -0.773 L -4.944 1.501 L -4.776 1.103 L -4.416 1.463 L -4.018 1.296 L -4.32 0.994 L -3.99 0.758 L -3.702 1.046 L -3.463 0.719 L -3.768 0.414 L -3.31 0.307 L -3.691 -0.075 L -3.293 -0.243 L -4.543 -1.492 L -4.711 -1.095 L -5.089 -1.473 L -5.499 -1.317 L -5.201 -1.019 L -5.54 -0.792 L -5.871 -1.123 L -5.783 -0.47 L -6.833 -1.52 L -7.712 -1.833 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 M -7.77 -1.325 L -8.527 -2.082 L -8.991 -1.981 L -9.26 -2.249 L -9.884 -2.308 L -9.991 -2.415 L -10.682 -2.541 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 M 19.608 3.699 L 17.833 3.674 L 12.679 3.179 L 10.862 2.885 L 8.482 2.357 L 6.596 1.74 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.596 -1.74 L 8.482 -2.357 L 10.862 -2.885 L 12.679 -3.179 L 17.833 -3.674 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 M 23.156 -3.748 L 24.549 -3.768 L 29.942 -3.42 L 33.736 -2.885 L 36.116 -2.356 L 37.428 -1.955 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 37.428 1.955 L 36.116 2.356 L 33.736 2.885 L 29.942 3.42 L 24.549 3.768 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 M 10.691 -2.556 L 10.712 -2.535 L 10.255 -2.426 L 10.228 -2.454 L 9.827 -2.289 L 9.764 -2.352 L 9.408 -2.142 L 9.3 -2.25 L 8.999 -1.986 L 8.836 -2.148 L 8.614 -1.804 L 8.387 -2.031 L 8.233 -1.62 L 7.961 -1.892 L 7.535 -1.753 L 7.897 -1.39 L 7.568 -1.153 L 7.108 -1.613 L 6.683 -1.472 L 7.295 -0.861 L 7.083 -0.507 L 6.293 -1.298 L 5.902 -1.123 L 6.971 -0.054 L 7.231 0.773 L 4.962 -1.497 L 4.798 -1.095 L 4.432 -1.461 L 4.027 -1.3 L 4.334 -0.994 L 4.005 -0.757 L 3.71 -1.052 L 3.468 -0.728 L 3.781 -0.415 L 3.321 -0.309 L 3.696 0.066 L 3.313 0.249 L 4.548 1.484 L 4.725 1.095 L 5.111 1.48 L 5.525 1.328 L 5.211 1.015 L 5.559 0.797 L 5.884 1.122 L 5.79 0.463 L 6.859 1.532 L 7.7 1.806 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 M 7.745 1.286 L 8.54 2.081 L 9.02 1.996 L 9.267 2.243 L 9.907 2.316 L 9.992 2.402 L 10.684 2.528 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 M 33.892 2.543 L 33.917 2.568 L 34.33 2.415 L 34.378 2.463 L 34.768 2.288 L 34.839 2.359 L 35.189 2.143 L 35.3 2.254 L 35.592 1.98 L 35.761 2.15 L 35.99 1.812 L 36.212 2.034 L 36.352 1.609 L 36.645 1.902 L 37.078 1.769 L 36.711 1.402 L 37.028 1.153 L 37.498 1.623 L 37.898 1.458 L 37.301 0.861 L 37.513 0.507 L 38.299 1.293 L 38.7 1.128 L 37.625 0.054 L 37.365 -0.773 L 39.638 1.501 L 39.806 1.103 L 40.166 1.463 L 40.564 1.296 L 40.262 0.994 L 40.592 0.758 L 40.88 1.046 L 41.119 0.719 L 40.814 0.414 L 41.272 0.307 L 40.891 -0.075 L 41.289 -0.243 L 40.039 -1.492 L 39.871 -1.095 L 39.493 -1.473 L 39.083 -1.317 L 39.381 -1.019 L 39.042 -0.792 L 38.711 -1.123 L 38.799 -0.47 L 37.749 -1.52 L 36.87 -1.833 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 M 36.812 -1.325 L 36.055 -2.082 L 35.591 -1.981 L 35.322 -2.249 L 34.698 -2.308 L 34.591 -2.415 L 33.9 -2.541 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:0.74' inkscape:groupmode='layer' inkscape:label='Layer 1, z:0.74' transform='translate(280.0, 218.315)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.74' fill='#000' stroke='none' y='15' >Layer 1, z:0.74</text>
+			<path d='M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 21.366 3.293 L 25.081 3.242 L 28.621 2.986 L 31.027 2.67 L 33.74 2.103 L 34.836 1.768 L 35.735 1.405 L 36.421 1.02 L 36.681 0.821 L 36.885 0.618 L 37.031 0.414 L 37.119 0.207 L 37.148 0.0 L 37.119 -0.207 L 37.031 -0.414 L 36.885 -0.618 L 36.681 -0.821 L 36.421 -1.02 L 35.735 -1.405 L 34.836 -1.768 L 33.74 -2.103 L 31.027 -2.67 L 28.621 -2.986 L 25.081 -3.242 L 21.366 -3.293 L 17.709 -3.138 L 14.341 -2.786 L 12.832 -2.543 L 10.284 -1.94 L 9.285 -1.59 L 8.491 -1.215 L 7.915 -0.821 L 7.711 -0.618 L 7.565 -0.414 L 7.477 -0.207 L 7.448 0.0 L 7.477 0.207 L 7.565 0.414 L 7.711 0.618 L 7.915 0.821 L 8.491 1.215 L 9.285 1.59 L 10.284 1.94 L 12.832 2.543 L 14.341 2.786 L 17.709 3.138 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.374 0.452 L 4.499 0.543 L 4.644 0.601 L 4.798 0.62 L 4.952 0.601 L 5.097 0.543 L 5.222 0.452 L 5.321 0.332 L 5.388 0.192 L 5.417 0.039 L 5.407 -0.116 L 5.359 -0.264 L 5.276 -0.395 L 5.162 -0.502 L 5.026 -0.576 L 4.876 -0.615 L 4.72 -0.615 L 4.57 -0.576 L 4.434 -0.502 L 4.32 -0.395 L 4.237 -0.264 L 4.189 -0.116 L 4.179 0.039 L 4.208 0.192 L 4.275 0.332 z M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -23.216 3.293 L -19.501 3.242 L -15.961 2.986 L -13.555 2.67 L -10.842 2.103 L -9.746 1.768 L -8.847 1.405 L -8.161 1.02 L -7.901 0.821 L -7.697 0.618 L -7.551 0.414 L -7.463 0.207 L -7.434 0.0 L -7.463 -0.207 L -7.551 -0.414 L -7.697 -0.618 L -7.901 -0.821 L -8.161 -1.02 L -8.847 -1.405 L -9.746 -1.768 L -10.842 -2.103 L -13.555 -2.67 L -15.961 -2.986 L -19.501 -3.242 L -23.216 -3.293 L -26.873 -3.138 L -30.241 -2.786 L -31.75 -2.543 L -34.298 -1.94 L -35.297 -1.59 L -36.091 -1.215 L -36.667 -0.821 L -36.871 -0.618 L -37.017 -0.414 L -37.105 -0.207 L -37.134 0.0 L -37.105 0.207 L -37.017 0.414 L -36.871 0.618 L -36.667 0.821 L -36.091 1.215 L -35.297 1.59 L -34.298 1.94 L -31.75 2.543 L -30.241 2.786 L -26.873 3.138 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.208 0.452 L -40.083 0.543 L -39.938 0.601 L -39.784 0.62 L -39.63 0.601 L -39.485 0.543 L -39.36 0.452 L -39.261 0.332 L -39.194 0.192 L -39.165 0.039 L -39.175 -0.116 L -39.223 -0.264 L -39.306 -0.395 L -39.42 -0.502 L -39.556 -0.576 L -39.706 -0.615 L -39.862 -0.615 L -40.012 -0.576 L -40.148 -0.502 L -40.262 -0.395 L -40.345 -0.264 L -40.393 -0.116 L -40.403 0.039 L -40.374 0.192 L -40.307 0.332 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M 22.841 3.473 L 23.152 3.469 L 25.09 3.442 L 28.641 3.185 L 31.061 2.867 L 33.79 2.297 L 34.903 1.957 L 35.822 1.586 L 36.531 1.187 L 36.813 0.972 L 37.038 0.748 L 37.206 0.513 L 37.313 0.261 L 37.35 0.0 L 37.313 -0.261 L 37.206 -0.513 L 37.038 -0.748 L 36.813 -0.972 L 36.531 -1.187 L 35.822 -1.586 L 34.903 -1.957 L 33.79 -2.297 L 31.061 -2.867 L 28.641 -3.185 L 25.09 -3.442 L 21.363 -3.493 L 17.694 -3.338 L 14.315 -2.984 L 12.793 -2.739 L 10.228 -2.132 L 9.209 -1.775 L 8.391 -1.389 L 7.787 -0.976 L 7.558 -0.748 L 7.39 -0.513 L 7.283 -0.261 L 7.246 0.0 L 7.283 0.261 L 7.39 0.513 L 7.558 0.748 L 7.787 0.976 L 8.391 1.389 L 9.209 1.775 L 10.228 2.132 L 12.793 2.739 L 14.315 2.984 L 17.694 3.338 L 21.363 3.493 L 22.841 3.473 L 22.841 3.473 L 22.841 3.473 L 22.841 3.473 M 38.985 -0.052 L 38.978 0.051 L 39.016 0.255 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.985 -0.052 L 38.985 -0.052 L 38.985 -0.052 L 38.985 -0.052 M 5.535 0.348 L 5.58 0.255 L 5.618 0.051 L 5.605 -0.154 L 5.541 -0.35 L 5.431 -0.523 L 5.28 -0.665 L 5.1 -0.763 L 4.902 -0.815 L 4.694 -0.815 L 4.496 -0.763 L 4.316 -0.665 L 4.165 -0.523 L 4.055 -0.35 L 3.991 -0.154 L 3.978 0.051 L 4.016 0.255 L 4.105 0.44 L 4.236 0.599 L 4.402 0.719 L 4.594 0.796 L 4.798 0.822 L 5.002 0.796 L 5.194 0.719 L 5.36 0.599 L 5.491 0.44 L 5.535 0.348 L 5.535 0.348 L 5.535 0.348 L 5.535 0.348 M -21.741 3.473 L -21.43 3.469 L -19.492 3.442 L -15.941 3.185 L -13.521 2.867 L -10.792 2.297 L -9.679 1.957 L -8.76 1.586 L -8.051 1.187 L -7.769 0.972 L -7.544 0.748 L -7.376 0.513 L -7.269 0.261 L -7.232 0.0 L -7.269 -0.261 L -7.376 -0.513 L -7.544 -0.748 L -7.769 -0.972 L -8.051 -1.187 L -8.76 -1.586 L -9.679 -1.957 L -10.792 -2.297 L -13.521 -2.867 L -15.941 -3.185 L -19.492 -3.442 L -23.219 -3.493 L -26.888 -3.338 L -30.267 -2.984 L -31.789 -2.739 L -34.354 -2.132 L -35.373 -1.775 L -36.191 -1.389 L -36.795 -0.976 L -37.024 -0.748 L -37.192 -0.513 L -37.299 -0.261 L -37.336 0.0 L -37.299 0.261 L -37.192 0.513 L -37.024 0.748 L -36.795 0.976 L -36.191 1.389 L -35.373 1.775 L -34.354 2.132 L -31.789 2.739 L -30.267 2.984 L -26.888 3.338 L -23.219 3.493 L -21.741 3.473 L -21.741 3.473 L -21.741 3.473 L -21.741 3.473 M -5.597 -0.052 L -5.604 0.051 L -5.566 0.255 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.597 -0.052 L -5.597 -0.052 L -5.597 -0.052 L -5.597 -0.052 M -39.047 0.348 L -39.002 0.255 L -38.964 0.051 L -38.977 -0.154 L -39.041 -0.35 L -39.151 -0.523 L -39.302 -0.665 L -39.482 -0.763 L -39.68 -0.815 L -39.888 -0.815 L -40.086 -0.763 L -40.266 -0.665 L -40.417 -0.523 L -40.527 -0.35 L -40.591 -0.154 L -40.604 0.051 L -40.566 0.255 L -40.477 0.44 L -40.346 0.599 L -40.18 0.719 L -39.988 0.796 L -39.784 0.822 L -39.58 0.796 L -39.388 0.719 L -39.222 0.599 L -39.091 0.44 L -39.047 0.348 L -39.047 0.348 L -39.047 0.348 L -39.047 0.348' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -44.451 0.0 L -44.031 1.843 L -43.131 3.196 L -42.167 3.946 L -41.092 4.449 L -36.668 5.103 L -26.944 6.468 L 17.838 6.474 L 30.302 6.2 L 40.106 4.611 L 41.266 4.366 L 42.502 3.745 L 43.466 2.812 L 44.09 1.724 L 44.433 0.0 L 44.09 -1.724 L 43.466 -2.812 L 42.502 -3.745 L 41.266 -4.366 L 40.106 -4.611 L 30.302 -6.2 L 17.838 -6.474 L -26.944 -6.468 L -36.668 -5.103 L -41.092 -4.449 L -42.167 -3.946 L -43.131 -3.196 L -44.031 -1.843 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 M 19.608 3.699 L 17.833 3.674 L 12.679 3.179 L 10.862 2.885 L 8.482 2.357 L 6.596 1.74 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.596 -1.74 L 8.482 -2.357 L 10.862 -2.885 L 12.679 -3.179 L 17.833 -3.674 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 M 23.156 -3.748 L 24.549 -3.768 L 29.942 -3.42 L 33.736 -2.885 L 36.116 -2.356 L 37.428 -1.955 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 37.428 1.955 L 36.116 2.356 L 33.736 2.885 L 29.942 3.42 L 24.549 3.768 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 M 10.712 2.535 L 10.691 2.556 L 10.255 2.426 L 10.228 2.454 L 9.827 2.289 L 9.764 2.352 L 9.408 2.142 L 9.3 2.25 L 8.999 1.986 L 8.836 2.148 L 8.614 1.804 L 8.387 2.031 L 8.233 1.62 L 7.961 1.892 L 7.535 1.753 L 7.897 1.39 L 7.568 1.153 L 7.108 1.613 L 6.683 1.472 L 7.295 0.861 L 7.083 0.507 L 6.293 1.298 L 5.902 1.123 L 6.971 0.054 L 7.231 -0.773 L 4.962 1.497 L 4.79 1.103 L 4.432 1.461 L 4.027 1.3 L 4.334 0.994 L 4.004 0.758 L 3.71 1.052 L 3.468 0.728 L 3.782 0.414 L 3.321 0.309 L 3.705 -0.075 L 3.313 -0.249 L 4.548 -1.484 L 4.725 -1.095 L 5.111 -1.48 L 5.525 -1.328 L 5.215 -1.019 L 5.554 -0.792 L 5.884 -1.122 L 5.797 -0.47 L 6.859 -1.532 L 7.7 -1.806 L 5.895 -0.002 L 5.895 -0.002 L 5.895 -0.002 L 5.895 -0.002 M 7.745 -1.286 L 8.54 -2.081 L 9.02 -1.996 L 9.267 -2.243 L 9.907 -2.316 L 9.992 -2.402 L 10.684 -2.528 L 10.717 -2.561 L 10.717 -2.561 L 10.717 -2.561 L 10.717 -2.561 M 33.892 -2.543 L 33.917 -2.568 L 34.33 -2.415 L 34.378 -2.463 L 34.768 -2.288 L 34.839 -2.359 L 35.189 -2.143 L 35.3 -2.254 L 35.592 -1.98 L 35.761 -2.15 L 35.99 -1.812 L 36.212 -2.034 L 36.352 -1.609 L 36.645 -1.902 L 37.078 -1.769 L 36.711 -1.402 L 37.028 -1.153 L 37.498 -1.623 L 37.898 -1.458 L 37.301 -0.861 L 37.513 -0.507 L 38.299 -1.293 L 38.7 -1.128 L 37.625 -0.054 L 37.365 0.773 L 39.638 -1.501 L 39.798 -1.095 L 40.166 -1.463 L 40.564 -1.296 L 40.262 -0.994 L 40.591 -0.757 L 40.88 -1.046 L 41.119 -0.719 L 40.815 -0.415 L 41.272 -0.307 L 40.9 0.066 L 41.289 0.243 L 40.039 1.492 L 39.871 1.095 L 39.493 1.473 L 39.083 1.317 L 39.385 1.015 L 39.037 0.797 L 38.711 1.123 L 38.806 0.463 L 37.749 1.52 L 36.87 1.833 L 38.7 0.003 L 38.7 0.003 L 38.7 0.003 L 38.7 0.003 M 36.812 1.325 L 36.055 2.082 L 35.591 1.981 L 35.322 2.249 L 34.698 2.308 L 34.591 2.415 L 33.9 2.541 L 33.859 2.581 L 33.859 2.581 L 33.859 2.581 L 33.859 2.581 M -24.974 3.699 L -26.749 3.674 L -31.903 3.179 L -33.72 2.885 L -36.1 2.357 L -37.986 1.74 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -37.986 -1.74 L -36.1 -2.357 L -33.72 -2.885 L -31.903 -3.179 L -26.749 -3.674 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 M -21.426 -3.748 L -20.033 -3.768 L -14.64 -3.42 L -10.846 -2.885 L -8.466 -2.356 L -7.154 -1.955 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -7.154 1.955 L -8.466 2.356 L -10.846 2.885 L -14.64 3.42 L -20.033 3.768 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 M -33.87 2.535 L -33.891 2.556 L -34.327 2.426 L -34.354 2.454 L -34.755 2.289 L -34.818 2.352 L -35.174 2.142 L -35.282 2.25 L -35.583 1.986 L -35.746 2.148 L -35.968 1.804 L -36.195 2.031 L -36.349 1.62 L -36.621 1.892 L -37.047 1.753 L -36.685 1.39 L -37.014 1.153 L -37.474 1.613 L -37.899 1.472 L -37.287 0.861 L -37.499 0.507 L -38.289 1.298 L -38.68 1.123 L -37.611 0.054 L -37.351 -0.773 L -39.62 1.497 L -39.792 1.103 L -40.15 1.461 L -40.555 1.3 L -40.248 0.994 L -40.578 0.758 L -40.872 1.052 L -41.114 0.728 L -40.8 0.414 L -41.261 0.309 L -40.877 -0.075 L -41.269 -0.249 L -40.034 -1.484 L -39.857 -1.095 L -39.471 -1.48 L -39.057 -1.328 L -39.367 -1.019 L -39.028 -0.792 L -38.698 -1.122 L -38.785 -0.47 L -37.723 -1.532 L -36.882 -1.806 L -38.687 -0.002 L -38.687 -0.002 L -38.687 -0.002 L -38.687 -0.002 M -36.837 -1.286 L -36.042 -2.081 L -35.562 -1.996 L -35.315 -2.243 L -34.675 -2.316 L -34.59 -2.402 L -33.898 -2.528 L -33.865 -2.561 L -33.865 -2.561 L -33.865 -2.561 L -33.865 -2.561 M -10.69 -2.543 L -10.665 -2.568 L -10.252 -2.415 L -10.204 -2.463 L -9.814 -2.288 L -9.743 -2.359 L -9.393 -2.143 L -9.282 -2.254 L -8.99 -1.98 L -8.821 -2.15 L -8.592 -1.812 L -8.37 -2.034 L -8.23 -1.609 L -7.937 -1.902 L -7.504 -1.769 L -7.871 -1.402 L -7.554 -1.153 L -7.084 -1.623 L -6.684 -1.458 L -7.281 -0.861 L -7.069 -0.507 L -6.283 -1.293 L -5.882 -1.128 L -6.957 -0.054 L -7.217 0.773 L -4.944 -1.501 L -4.784 -1.095 L -4.416 -1.463 L -4.018 -1.296 L -4.32 -0.994 L -3.991 -0.757 L -3.702 -1.046 L -3.463 -0.719 L -3.767 -0.415 L -3.31 -0.307 L -3.682 0.066 L -3.293 0.243 L -4.543 1.492 L -4.711 1.095 L -5.089 1.473 L -5.499 1.317 L -5.197 1.015 L -5.545 0.797 L -5.871 1.123 L -5.776 0.463 L -6.833 1.52 L -7.712 1.833 L -5.882 0.003 L -5.882 0.003 L -5.882 0.003 L -5.882 0.003 M -7.77 1.325 L -8.527 2.082 L -8.991 1.981 L -9.26 2.249 L -9.884 2.308 L -9.991 2.415 L -10.682 2.541 L -10.723 2.581 L -10.723 2.581 L -10.723 2.581 L -10.723 2.581' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:1.01' inkscape:groupmode='layer' inkscape:label='Layer 2, z:1.01' transform='translate(280.0, 308.723)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.01' fill='#000' stroke='none' y='15' >Layer 2, z:1.01</text>
+			<path d='M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -23.216 3.293 L -19.501 3.242 L -15.961 2.986 L -13.555 2.67 L -10.842 2.103 L -9.746 1.768 L -8.847 1.405 L -8.161 1.02 L -7.901 0.821 L -7.697 0.618 L -7.551 0.414 L -7.463 0.207 L -7.434 0.0 L -7.463 -0.207 L -7.551 -0.414 L -7.697 -0.618 L -7.901 -0.821 L -8.161 -1.02 L -8.847 -1.405 L -9.746 -1.768 L -10.842 -2.103 L -13.555 -2.67 L -15.961 -2.986 L -19.501 -3.242 L -23.216 -3.293 L -26.873 -3.138 L -30.241 -2.786 L -31.75 -2.543 L -34.298 -1.94 L -35.297 -1.59 L -36.091 -1.215 L -36.667 -0.821 L -36.871 -0.618 L -37.017 -0.414 L -37.105 -0.207 L -37.134 0.0 L -37.105 0.207 L -37.017 0.414 L -36.871 0.618 L -36.667 0.821 L -36.091 1.215 L -35.297 1.59 L -34.298 1.94 L -31.75 2.543 L -30.241 2.786 L -26.873 3.138 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.208 0.452 L -40.083 0.543 L -39.938 0.601 L -39.784 0.62 L -39.63 0.601 L -39.485 0.543 L -39.36 0.452 L -39.261 0.332 L -39.194 0.192 L -39.165 0.039 L -39.175 -0.116 L -39.223 -0.264 L -39.306 -0.395 L -39.42 -0.502 L -39.556 -0.576 L -39.706 -0.615 L -39.862 -0.615 L -40.012 -0.576 L -40.148 -0.502 L -40.262 -0.395 L -40.345 -0.264 L -40.393 -0.116 L -40.403 0.039 L -40.374 0.192 L -40.307 0.332 z M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 21.366 3.293 L 25.081 3.242 L 28.621 2.986 L 31.027 2.67 L 33.74 2.103 L 34.836 1.768 L 35.735 1.405 L 36.421 1.02 L 36.681 0.821 L 36.885 0.618 L 37.031 0.414 L 37.119 0.207 L 37.148 0.0 L 37.119 -0.207 L 37.031 -0.414 L 36.885 -0.618 L 36.681 -0.821 L 36.421 -1.02 L 35.735 -1.405 L 34.836 -1.768 L 33.74 -2.103 L 31.027 -2.67 L 28.621 -2.986 L 25.081 -3.242 L 21.366 -3.293 L 17.709 -3.138 L 14.341 -2.786 L 12.832 -2.543 L 10.284 -1.94 L 9.285 -1.59 L 8.491 -1.215 L 7.915 -0.821 L 7.711 -0.618 L 7.565 -0.414 L 7.477 -0.207 L 7.448 0.0 L 7.477 0.207 L 7.565 0.414 L 7.711 0.618 L 7.915 0.821 L 8.491 1.215 L 9.285 1.59 L 10.284 1.94 L 12.832 2.543 L 14.341 2.786 L 17.709 3.138 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.374 0.452 L 4.499 0.543 L 4.644 0.601 L 4.798 0.62 L 4.952 0.601 L 5.097 0.543 L 5.222 0.452 L 5.321 0.332 L 5.388 0.192 L 5.417 0.039 L 5.407 -0.116 L 5.359 -0.264 L 5.276 -0.395 L 5.162 -0.502 L 5.026 -0.576 L 4.876 -0.615 L 4.72 -0.615 L 4.57 -0.576 L 4.434 -0.502 L 4.32 -0.395 L 4.237 -0.264 L 4.189 -0.116 L 4.179 0.039 L 4.208 0.192 L 4.275 0.332 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -21.247 3.466 L -19.492 3.442 L -15.941 3.185 L -13.521 2.867 L -10.792 2.297 L -9.679 1.957 L -8.76 1.586 L -8.051 1.187 L -7.769 0.972 L -7.544 0.748 L -7.376 0.513 L -7.269 0.261 L -7.232 0.0 L -7.269 -0.261 L -7.376 -0.513 L -7.544 -0.748 L -7.769 -0.972 L -8.051 -1.187 L -8.76 -1.586 L -9.679 -1.957 L -10.792 -2.297 L -13.521 -2.867 L -15.941 -3.185 L -19.492 -3.442 L -23.219 -3.493 L -26.888 -3.338 L -30.267 -2.984 L -31.789 -2.739 L -34.354 -2.132 L -35.373 -1.775 L -36.191 -1.389 L -36.795 -0.976 L -37.024 -0.748 L -37.192 -0.513 L -37.299 -0.261 L -37.336 0.0 L -37.299 0.261 L -37.192 0.513 L -37.024 0.748 L -36.795 0.976 L -36.191 1.389 L -35.373 1.775 L -34.354 2.132 L -31.789 2.739 L -30.267 2.984 L -26.888 3.338 L -23.219 3.493 L -21.43 3.469 L -21.247 3.466 L -21.247 3.466 L -21.247 3.466 L -21.247 3.466 M -5.487 0.42 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.566 0.255 L -5.487 0.42 L -5.487 0.42 L -5.487 0.42 L -5.487 0.42 M -38.976 -0.132 L -38.977 -0.154 L -39.041 -0.35 L -39.151 -0.523 L -39.302 -0.665 L -39.482 -0.763 L -39.68 -0.815 L -39.888 -0.815 L -40.086 -0.763 L -40.266 -0.665 L -40.417 -0.523 L -40.527 -0.35 L -40.591 -0.154 L -40.604 0.051 L -40.566 0.255 L -40.477 0.44 L -40.346 0.599 L -40.18 0.719 L -39.988 0.796 L -39.784 0.822 L -39.58 0.796 L -39.388 0.719 L -39.222 0.599 L -39.091 0.44 L -39.002 0.255 L -38.964 0.051 L -38.976 -0.132 L -38.976 -0.132 L -38.976 -0.132 L -38.976 -0.132 M 23.335 3.466 L 25.09 3.442 L 28.641 3.185 L 31.061 2.867 L 33.79 2.297 L 34.903 1.957 L 35.822 1.586 L 36.531 1.187 L 36.813 0.972 L 37.038 0.748 L 37.206 0.513 L 37.313 0.261 L 37.35 0.0 L 37.313 -0.261 L 37.206 -0.513 L 37.038 -0.748 L 36.813 -0.972 L 36.531 -1.187 L 35.822 -1.586 L 34.903 -1.957 L 33.79 -2.297 L 31.061 -2.867 L 28.641 -3.185 L 25.09 -3.442 L 21.363 -3.493 L 17.694 -3.338 L 14.315 -2.984 L 12.793 -2.739 L 10.228 -2.132 L 9.209 -1.775 L 8.391 -1.389 L 7.787 -0.976 L 7.558 -0.748 L 7.39 -0.513 L 7.283 -0.261 L 7.246 0.0 L 7.283 0.261 L 7.39 0.513 L 7.558 0.748 L 7.787 0.976 L 8.391 1.389 L 9.209 1.775 L 10.228 2.132 L 12.793 2.739 L 14.315 2.984 L 17.694 3.338 L 21.363 3.493 L 23.152 3.469 L 23.335 3.466 L 23.335 3.466 L 23.335 3.466 L 23.335 3.466 M 39.095 0.42 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 39.016 0.255 L 39.095 0.42 L 39.095 0.42 L 39.095 0.42 L 39.095 0.42 M 5.606 -0.132 L 5.605 -0.154 L 5.541 -0.35 L 5.431 -0.523 L 5.28 -0.665 L 5.1 -0.763 L 4.902 -0.815 L 4.694 -0.815 L 4.496 -0.763 L 4.316 -0.665 L 4.165 -0.523 L 4.055 -0.35 L 3.991 -0.154 L 3.978 0.051 L 4.016 0.255 L 4.105 0.44 L 4.236 0.599 L 4.402 0.719 L 4.594 0.796 L 4.798 0.822 L 5.002 0.796 L 5.194 0.719 L 5.36 0.599 L 5.491 0.44 L 5.58 0.255 L 5.618 0.051 L 5.606 -0.132 L 5.606 -0.132 L 5.606 -0.132 L 5.606 -0.132' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -24.974 3.699 L -26.749 3.674 L -31.903 3.179 L -33.72 2.885 L -36.1 2.357 L -37.986 1.74 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -37.986 -1.74 L -36.1 -2.357 L -33.72 -2.885 L -31.903 -3.179 L -26.749 -3.674 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 M -21.426 -3.748 L -20.033 -3.768 L -14.64 -3.42 L -10.846 -2.885 L -8.466 -2.356 L -7.154 -1.955 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -7.154 1.955 L -8.466 2.356 L -10.846 2.885 L -14.64 3.42 L -20.033 3.768 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 M -33.891 -2.556 L -33.87 -2.535 L -34.327 -2.426 L -34.354 -2.454 L -34.755 -2.289 L -34.818 -2.352 L -35.174 -2.142 L -35.282 -2.25 L -35.583 -1.986 L -35.746 -2.148 L -35.968 -1.804 L -36.195 -2.031 L -36.349 -1.62 L -36.621 -1.892 L -37.047 -1.753 L -36.685 -1.39 L -37.014 -1.153 L -37.474 -1.613 L -37.899 -1.472 L -37.287 -0.861 L -37.499 -0.507 L -38.289 -1.298 L -38.68 -1.123 L -37.611 -0.054 L -37.351 0.773 L -39.62 -1.497 L -39.784 -1.095 L -40.15 -1.461 L -40.555 -1.3 L -40.248 -0.994 L -40.577 -0.757 L -40.872 -1.052 L -41.114 -0.728 L -40.801 -0.415 L -41.261 -0.309 L -40.886 0.066 L -41.269 0.249 L -40.034 1.484 L -39.857 1.095 L -39.471 1.48 L -39.057 1.328 L -39.371 1.015 L -39.023 0.797 L -38.698 1.122 L -38.792 0.463 L -37.723 1.532 L -36.882 1.806 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 M -36.837 1.286 L -36.042 2.081 L -35.562 1.996 L -35.315 2.243 L -34.675 2.316 L -34.59 2.402 L -33.898 2.528 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 M -10.69 2.543 L -10.665 2.568 L -10.252 2.415 L -10.204 2.463 L -9.814 2.288 L -9.743 2.359 L -9.393 2.143 L -9.282 2.254 L -8.99 1.98 L -8.821 2.15 L -8.592 1.812 L -8.37 2.034 L -8.23 1.609 L -7.937 1.902 L -7.504 1.769 L -7.871 1.402 L -7.554 1.153 L -7.084 1.623 L -6.684 1.458 L -7.281 0.861 L -7.069 0.507 L -6.283 1.293 L -5.882 1.128 L -6.957 0.054 L -7.217 -0.773 L -4.944 1.501 L -4.776 1.103 L -4.416 1.463 L -4.018 1.296 L -4.32 0.994 L -3.99 0.758 L -3.702 1.046 L -3.463 0.719 L -3.768 0.414 L -3.31 0.307 L -3.691 -0.075 L -3.293 -0.243 L -4.543 -1.492 L -4.711 -1.095 L -5.089 -1.473 L -5.499 -1.317 L -5.201 -1.019 L -5.54 -0.792 L -5.871 -1.123 L -5.783 -0.47 L -6.833 -1.52 L -7.712 -1.833 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 M -7.77 -1.325 L -8.527 -2.082 L -8.991 -1.981 L -9.26 -2.249 L -9.884 -2.308 L -9.991 -2.415 L -10.682 -2.541 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 M 19.608 3.699 L 17.833 3.674 L 12.679 3.179 L 10.862 2.885 L 8.482 2.357 L 6.596 1.74 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.596 -1.74 L 8.482 -2.357 L 10.862 -2.885 L 12.679 -3.179 L 17.833 -3.674 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 M 23.156 -3.748 L 24.549 -3.768 L 29.942 -3.42 L 33.736 -2.885 L 36.116 -2.356 L 37.428 -1.955 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 37.428 1.955 L 36.116 2.356 L 33.736 2.885 L 29.942 3.42 L 24.549 3.768 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 M 10.691 -2.556 L 10.712 -2.535 L 10.255 -2.426 L 10.228 -2.454 L 9.827 -2.289 L 9.764 -2.352 L 9.408 -2.142 L 9.3 -2.25 L 8.999 -1.986 L 8.836 -2.148 L 8.614 -1.804 L 8.387 -2.031 L 8.233 -1.62 L 7.961 -1.892 L 7.535 -1.753 L 7.897 -1.39 L 7.568 -1.153 L 7.108 -1.613 L 6.683 -1.472 L 7.295 -0.861 L 7.083 -0.507 L 6.293 -1.298 L 5.902 -1.123 L 6.971 -0.054 L 7.231 0.773 L 4.962 -1.497 L 4.798 -1.095 L 4.432 -1.461 L 4.027 -1.3 L 4.334 -0.994 L 4.005 -0.757 L 3.71 -1.052 L 3.468 -0.728 L 3.781 -0.415 L 3.321 -0.309 L 3.696 0.066 L 3.313 0.249 L 4.548 1.484 L 4.725 1.095 L 5.111 1.48 L 5.525 1.328 L 5.211 1.015 L 5.559 0.797 L 5.884 1.122 L 5.79 0.463 L 6.859 1.532 L 7.7 1.806 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 M 7.745 1.286 L 8.54 2.081 L 9.02 1.996 L 9.267 2.243 L 9.907 2.316 L 9.992 2.402 L 10.684 2.528 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 M 33.892 2.543 L 33.917 2.568 L 34.33 2.415 L 34.378 2.463 L 34.768 2.288 L 34.839 2.359 L 35.189 2.143 L 35.3 2.254 L 35.592 1.98 L 35.761 2.15 L 35.99 1.812 L 36.212 2.034 L 36.352 1.609 L 36.645 1.902 L 37.078 1.769 L 36.711 1.402 L 37.028 1.153 L 37.498 1.623 L 37.898 1.458 L 37.301 0.861 L 37.513 0.507 L 38.299 1.293 L 38.7 1.128 L 37.625 0.054 L 37.365 -0.773 L 39.638 1.501 L 39.806 1.103 L 40.166 1.463 L 40.564 1.296 L 40.262 0.994 L 40.592 0.758 L 40.88 1.046 L 41.119 0.719 L 40.814 0.414 L 41.272 0.307 L 40.891 -0.075 L 41.289 -0.243 L 40.039 -1.492 L 39.871 -1.095 L 39.493 -1.473 L 39.083 -1.317 L 39.381 -1.019 L 39.042 -0.792 L 38.711 -1.123 L 38.799 -0.47 L 37.749 -1.52 L 36.87 -1.833 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 M 36.812 -1.325 L 36.055 -2.082 L 35.591 -1.981 L 35.322 -2.249 L 34.698 -2.308 L 34.591 -2.415 L 33.9 -2.541 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:1.28' inkscape:groupmode='layer' inkscape:label='Layer 3, z:1.28' transform='translate(280.0, 399.13)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.28' fill='#000' stroke='none' y='15' >Layer 3, z:1.28</text>
+			<path d='M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 21.366 3.293 L 25.081 3.242 L 28.621 2.986 L 31.027 2.67 L 33.74 2.103 L 34.836 1.768 L 35.735 1.405 L 36.421 1.02 L 36.681 0.821 L 36.885 0.618 L 37.031 0.414 L 37.119 0.207 L 37.148 0.0 L 37.119 -0.207 L 37.031 -0.414 L 36.885 -0.618 L 36.681 -0.821 L 36.421 -1.02 L 35.735 -1.405 L 34.836 -1.768 L 33.74 -2.103 L 31.027 -2.67 L 28.621 -2.986 L 25.081 -3.242 L 21.366 -3.293 L 17.709 -3.138 L 14.341 -2.786 L 12.832 -2.543 L 10.284 -1.94 L 9.285 -1.59 L 8.491 -1.215 L 7.915 -0.821 L 7.711 -0.618 L 7.565 -0.414 L 7.477 -0.207 L 7.448 0.0 L 7.477 0.207 L 7.565 0.414 L 7.711 0.618 L 7.915 0.821 L 8.491 1.215 L 9.285 1.59 L 10.284 1.94 L 12.832 2.543 L 14.341 2.786 L 17.709 3.138 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.374 0.452 L 4.499 0.543 L 4.644 0.601 L 4.798 0.62 L 4.952 0.601 L 5.097 0.543 L 5.222 0.452 L 5.321 0.332 L 5.388 0.192 L 5.417 0.039 L 5.407 -0.116 L 5.359 -0.264 L 5.276 -0.395 L 5.162 -0.502 L 5.026 -0.576 L 4.876 -0.615 L 4.72 -0.615 L 4.57 -0.576 L 4.434 -0.502 L 4.32 -0.395 L 4.237 -0.264 L 4.189 -0.116 L 4.179 0.039 L 4.208 0.192 L 4.275 0.332 z M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -23.216 3.293 L -19.501 3.242 L -15.961 2.986 L -13.555 2.67 L -10.842 2.103 L -9.746 1.768 L -8.847 1.405 L -8.161 1.02 L -7.901 0.821 L -7.697 0.618 L -7.551 0.414 L -7.463 0.207 L -7.434 0.0 L -7.463 -0.207 L -7.551 -0.414 L -7.697 -0.618 L -7.901 -0.821 L -8.161 -1.02 L -8.847 -1.405 L -9.746 -1.768 L -10.842 -2.103 L -13.555 -2.67 L -15.961 -2.986 L -19.501 -3.242 L -23.216 -3.293 L -26.873 -3.138 L -30.241 -2.786 L -31.75 -2.543 L -34.298 -1.94 L -35.297 -1.59 L -36.091 -1.215 L -36.667 -0.821 L -36.871 -0.618 L -37.017 -0.414 L -37.105 -0.207 L -37.134 0.0 L -37.105 0.207 L -37.017 0.414 L -36.871 0.618 L -36.667 0.821 L -36.091 1.215 L -35.297 1.59 L -34.298 1.94 L -31.75 2.543 L -30.241 2.786 L -26.873 3.138 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.208 0.452 L -40.083 0.543 L -39.938 0.601 L -39.784 0.62 L -39.63 0.601 L -39.485 0.543 L -39.36 0.452 L -39.261 0.332 L -39.194 0.192 L -39.165 0.039 L -39.175 -0.116 L -39.223 -0.264 L -39.306 -0.395 L -39.42 -0.502 L -39.556 -0.576 L -39.706 -0.615 L -39.862 -0.615 L -40.012 -0.576 L -40.148 -0.502 L -40.262 -0.395 L -40.345 -0.264 L -40.393 -0.116 L -40.403 0.039 L -40.374 0.192 L -40.307 0.332 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M 23.03 3.471 L 23.152 3.469 L 25.09 3.442 L 28.641 3.185 L 31.061 2.867 L 33.79 2.297 L 34.903 1.957 L 35.822 1.586 L 36.531 1.187 L 36.813 0.972 L 37.038 0.748 L 37.206 0.513 L 37.313 0.261 L 37.35 0.0 L 37.313 -0.261 L 37.206 -0.513 L 37.038 -0.748 L 36.813 -0.972 L 36.531 -1.187 L 35.822 -1.586 L 34.903 -1.957 L 33.79 -2.297 L 31.061 -2.867 L 28.641 -3.185 L 25.09 -3.442 L 21.363 -3.493 L 17.694 -3.338 L 14.315 -2.984 L 12.793 -2.739 L 10.228 -2.132 L 9.209 -1.775 L 8.391 -1.389 L 7.787 -0.976 L 7.558 -0.748 L 7.39 -0.513 L 7.283 -0.261 L 7.246 0.0 L 7.283 0.261 L 7.39 0.513 L 7.558 0.748 L 7.787 0.976 L 8.391 1.389 L 9.209 1.775 L 10.228 2.132 L 12.793 2.739 L 14.315 2.984 L 17.694 3.338 L 21.363 3.493 L 23.03 3.471 L 23.03 3.471 L 23.03 3.471 L 23.03 3.471 M 38.994 0.135 L 39.016 0.255 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 38.994 0.135 L 38.994 0.135 L 38.994 0.135 L 38.994 0.135 M 5.596 0.171 L 5.618 0.051 L 5.605 -0.154 L 5.541 -0.35 L 5.431 -0.523 L 5.28 -0.665 L 5.1 -0.763 L 4.902 -0.815 L 4.694 -0.815 L 4.496 -0.763 L 4.316 -0.665 L 4.165 -0.523 L 4.055 -0.35 L 3.991 -0.154 L 3.978 0.051 L 4.016 0.255 L 4.105 0.44 L 4.236 0.599 L 4.402 0.719 L 4.594 0.796 L 4.798 0.822 L 5.002 0.796 L 5.194 0.719 L 5.36 0.599 L 5.491 0.44 L 5.58 0.255 L 5.596 0.171 L 5.596 0.171 L 5.596 0.171 L 5.596 0.171 M -21.552 3.471 L -21.43 3.469 L -19.492 3.442 L -15.941 3.185 L -13.521 2.867 L -10.792 2.297 L -9.679 1.957 L -8.76 1.586 L -8.051 1.187 L -7.769 0.972 L -7.544 0.748 L -7.376 0.513 L -7.269 0.261 L -7.232 0.0 L -7.269 -0.261 L -7.376 -0.513 L -7.544 -0.748 L -7.769 -0.972 L -8.051 -1.187 L -8.76 -1.586 L -9.679 -1.957 L -10.792 -2.297 L -13.521 -2.867 L -15.941 -3.185 L -19.492 -3.442 L -23.219 -3.493 L -26.888 -3.338 L -30.267 -2.984 L -31.789 -2.739 L -34.354 -2.132 L -35.373 -1.775 L -36.191 -1.389 L -36.795 -0.976 L -37.024 -0.748 L -37.192 -0.513 L -37.299 -0.261 L -37.336 0.0 L -37.299 0.261 L -37.192 0.513 L -37.024 0.748 L -36.795 0.976 L -36.191 1.389 L -35.373 1.775 L -34.354 2.132 L -31.789 2.739 L -30.267 2.984 L -26.888 3.338 L -23.219 3.493 L -21.552 3.471 L -21.552 3.471 L -21.552 3.471 L -21.552 3.471 M -5.588 0.135 L -5.566 0.255 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.588 0.135 L -5.588 0.135 L -5.588 0.135 L -5.588 0.135 M -38.986 0.171 L -38.964 0.051 L -38.977 -0.154 L -39.041 -0.35 L -39.151 -0.523 L -39.302 -0.665 L -39.482 -0.763 L -39.68 -0.815 L -39.888 -0.815 L -40.086 -0.763 L -40.266 -0.665 L -40.417 -0.523 L -40.527 -0.35 L -40.591 -0.154 L -40.604 0.051 L -40.566 0.255 L -40.477 0.44 L -40.346 0.599 L -40.18 0.719 L -39.988 0.796 L -39.784 0.822 L -39.58 0.796 L -39.388 0.719 L -39.222 0.599 L -39.091 0.44 L -39.002 0.255 L -38.986 0.171 L -38.986 0.171 L -38.986 0.171 L -38.986 0.171' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M 19.608 3.699 L 17.833 3.674 L 12.679 3.179 L 10.862 2.885 L 8.482 2.357 L 6.596 1.74 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.596 -1.74 L 8.482 -2.357 L 10.862 -2.885 L 12.679 -3.179 L 17.833 -3.674 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 M 23.156 -3.748 L 24.549 -3.768 L 29.942 -3.42 L 33.736 -2.885 L 36.116 -2.356 L 37.428 -1.955 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 37.428 1.955 L 36.116 2.356 L 33.736 2.885 L 29.942 3.42 L 24.549 3.768 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 M 10.712 2.535 L 10.691 2.556 L 10.255 2.426 L 10.228 2.454 L 9.827 2.289 L 9.764 2.352 L 9.408 2.142 L 9.3 2.25 L 8.999 1.986 L 8.836 2.148 L 8.614 1.804 L 8.387 2.031 L 8.233 1.62 L 7.961 1.892 L 7.535 1.753 L 7.897 1.39 L 7.568 1.153 L 7.108 1.613 L 6.683 1.472 L 7.295 0.861 L 7.083 0.507 L 6.293 1.298 L 5.902 1.123 L 6.971 0.054 L 7.231 -0.773 L 4.962 1.497 L 4.79 1.103 L 4.432 1.461 L 4.027 1.3 L 4.334 0.994 L 4.004 0.758 L 3.71 1.052 L 3.468 0.728 L 3.782 0.414 L 3.321 0.309 L 3.705 -0.075 L 3.313 -0.249 L 4.548 -1.484 L 4.725 -1.095 L 5.111 -1.48 L 5.525 -1.328 L 5.215 -1.019 L 5.554 -0.792 L 5.884 -1.122 L 5.797 -0.47 L 6.859 -1.532 L 7.7 -1.806 L 5.895 -0.002 L 5.895 -0.002 L 5.895 -0.002 L 5.895 -0.002 M 7.745 -1.286 L 8.54 -2.081 L 9.02 -1.996 L 9.267 -2.243 L 9.907 -2.316 L 9.992 -2.402 L 10.684 -2.528 L 10.717 -2.561 L 10.717 -2.561 L 10.717 -2.561 L 10.717 -2.561 M 33.892 -2.543 L 33.917 -2.568 L 34.33 -2.415 L 34.378 -2.463 L 34.768 -2.288 L 34.839 -2.359 L 35.189 -2.143 L 35.3 -2.254 L 35.592 -1.98 L 35.761 -2.15 L 35.99 -1.812 L 36.212 -2.034 L 36.352 -1.609 L 36.645 -1.902 L 37.078 -1.769 L 36.711 -1.402 L 37.028 -1.153 L 37.498 -1.623 L 37.898 -1.458 L 37.301 -0.861 L 37.513 -0.507 L 38.299 -1.293 L 38.7 -1.128 L 37.625 -0.054 L 37.365 0.773 L 39.638 -1.501 L 39.798 -1.095 L 40.166 -1.463 L 40.564 -1.296 L 40.262 -0.994 L 40.591 -0.757 L 40.88 -1.046 L 41.119 -0.719 L 40.815 -0.415 L 41.272 -0.307 L 40.9 0.066 L 41.289 0.243 L 40.039 1.492 L 39.871 1.095 L 39.493 1.473 L 39.083 1.317 L 39.385 1.015 L 39.037 0.797 L 38.711 1.123 L 38.806 0.463 L 37.749 1.52 L 36.87 1.833 L 38.7 0.003 L 38.7 0.003 L 38.7 0.003 L 38.7 0.003 M 36.812 1.325 L 36.055 2.082 L 35.591 1.981 L 35.322 2.249 L 34.698 2.308 L 34.591 2.415 L 33.9 2.541 L 33.859 2.581 L 33.859 2.581 L 33.859 2.581 L 33.859 2.581 M -24.974 3.699 L -26.749 3.674 L -31.903 3.179 L -33.72 2.885 L -36.1 2.357 L -37.986 1.74 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -37.986 -1.74 L -36.1 -2.357 L -33.72 -2.885 L -31.903 -3.179 L -26.749 -3.674 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 M -21.426 -3.748 L -20.033 -3.768 L -14.64 -3.42 L -10.846 -2.885 L -8.466 -2.356 L -7.154 -1.955 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -7.154 1.955 L -8.466 2.356 L -10.846 2.885 L -14.64 3.42 L -20.033 3.768 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 M -33.87 2.535 L -33.891 2.556 L -34.327 2.426 L -34.354 2.454 L -34.755 2.289 L -34.818 2.352 L -35.174 2.142 L -35.282 2.25 L -35.583 1.986 L -35.746 2.148 L -35.968 1.804 L -36.195 2.031 L -36.349 1.62 L -36.621 1.892 L -37.047 1.753 L -36.685 1.39 L -37.014 1.153 L -37.474 1.613 L -37.899 1.472 L -37.287 0.861 L -37.499 0.507 L -38.289 1.298 L -38.68 1.123 L -37.611 0.054 L -37.351 -0.773 L -39.62 1.497 L -39.792 1.103 L -40.15 1.461 L -40.555 1.3 L -40.248 0.994 L -40.578 0.758 L -40.872 1.052 L -41.114 0.728 L -40.8 0.414 L -41.261 0.309 L -40.877 -0.075 L -41.269 -0.249 L -40.034 -1.484 L -39.857 -1.095 L -39.471 -1.48 L -39.057 -1.328 L -39.367 -1.019 L -39.028 -0.792 L -38.698 -1.122 L -38.785 -0.47 L -37.723 -1.532 L -36.882 -1.806 L -38.687 -0.002 L -38.687 -0.002 L -38.687 -0.002 L -38.687 -0.002 M -36.837 -1.286 L -36.042 -2.081 L -35.562 -1.996 L -35.315 -2.243 L -34.675 -2.316 L -34.59 -2.402 L -33.898 -2.528 L -33.865 -2.561 L -33.865 -2.561 L -33.865 -2.561 L -33.865 -2.561 M -10.69 -2.543 L -10.665 -2.568 L -10.252 -2.415 L -10.204 -2.463 L -9.814 -2.288 L -9.743 -2.359 L -9.393 -2.143 L -9.282 -2.254 L -8.99 -1.98 L -8.821 -2.15 L -8.592 -1.812 L -8.37 -2.034 L -8.23 -1.609 L -7.937 -1.902 L -7.504 -1.769 L -7.871 -1.402 L -7.554 -1.153 L -7.084 -1.623 L -6.684 -1.458 L -7.281 -0.861 L -7.069 -0.507 L -6.283 -1.293 L -5.882 -1.128 L -6.957 -0.054 L -7.217 0.773 L -4.944 -1.501 L -4.784 -1.095 L -4.416 -1.463 L -4.018 -1.296 L -4.32 -0.994 L -3.991 -0.757 L -3.702 -1.046 L -3.463 -0.719 L -3.767 -0.415 L -3.31 -0.307 L -3.682 0.066 L -3.293 0.243 L -4.543 1.492 L -4.711 1.095 L -5.089 1.473 L -5.499 1.317 L -5.197 1.015 L -5.545 0.797 L -5.871 1.123 L -5.776 0.463 L -6.833 1.52 L -7.712 1.833 L -5.882 0.003 L -5.882 0.003 L -5.882 0.003 L -5.882 0.003 M -7.77 1.325 L -8.527 2.082 L -8.991 1.981 L -9.26 2.249 L -9.884 2.308 L -9.991 2.415 L -10.682 2.541 L -10.723 2.581 L -10.723 2.581 L -10.723 2.581 L -10.723 2.581' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:1.55' inkscape:groupmode='layer' inkscape:label='Layer 4, z:1.55' transform='translate(280.0, 489.538)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.55' fill='#000' stroke='none' y='15' >Layer 4, z:1.55</text>
+			<path d='M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -23.216 3.293 L -19.501 3.242 L -15.961 2.986 L -13.555 2.67 L -10.842 2.103 L -9.746 1.768 L -8.847 1.405 L -8.161 1.02 L -7.901 0.821 L -7.697 0.618 L -7.551 0.414 L -7.463 0.207 L -7.434 0.0 L -7.463 -0.207 L -7.551 -0.414 L -7.697 -0.618 L -7.901 -0.821 L -8.161 -1.02 L -8.847 -1.405 L -9.746 -1.768 L -10.842 -2.103 L -13.555 -2.67 L -15.961 -2.986 L -19.501 -3.242 L -23.216 -3.293 L -26.873 -3.138 L -30.241 -2.786 L -31.75 -2.543 L -34.298 -1.94 L -35.297 -1.59 L -36.091 -1.215 L -36.667 -0.821 L -36.871 -0.618 L -37.017 -0.414 L -37.105 -0.207 L -37.134 0.0 L -37.105 0.207 L -37.017 0.414 L -36.871 0.618 L -36.667 0.821 L -36.091 1.215 L -35.297 1.59 L -34.298 1.94 L -31.75 2.543 L -30.241 2.786 L -26.873 3.138 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.208 0.452 L -40.083 0.543 L -39.938 0.601 L -39.784 0.62 L -39.63 0.601 L -39.485 0.543 L -39.36 0.452 L -39.261 0.332 L -39.194 0.192 L -39.165 0.039 L -39.175 -0.116 L -39.223 -0.264 L -39.306 -0.395 L -39.42 -0.502 L -39.556 -0.576 L -39.706 -0.615 L -39.862 -0.615 L -40.012 -0.576 L -40.148 -0.502 L -40.262 -0.395 L -40.345 -0.264 L -40.393 -0.116 L -40.403 0.039 L -40.374 0.192 L -40.307 0.332 z M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 21.366 3.293 L 25.081 3.242 L 28.621 2.986 L 31.027 2.67 L 33.74 2.103 L 34.836 1.768 L 35.735 1.405 L 36.421 1.02 L 36.681 0.821 L 36.885 0.618 L 37.031 0.414 L 37.119 0.207 L 37.148 0.0 L 37.119 -0.207 L 37.031 -0.414 L 36.885 -0.618 L 36.681 -0.821 L 36.421 -1.02 L 35.735 -1.405 L 34.836 -1.768 L 33.74 -2.103 L 31.027 -2.67 L 28.621 -2.986 L 25.081 -3.242 L 21.366 -3.293 L 17.709 -3.138 L 14.341 -2.786 L 12.832 -2.543 L 10.284 -1.94 L 9.285 -1.59 L 8.491 -1.215 L 7.915 -0.821 L 7.711 -0.618 L 7.565 -0.414 L 7.477 -0.207 L 7.448 0.0 L 7.477 0.207 L 7.565 0.414 L 7.711 0.618 L 7.915 0.821 L 8.491 1.215 L 9.285 1.59 L 10.284 1.94 L 12.832 2.543 L 14.341 2.786 L 17.709 3.138 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.374 0.452 L 4.499 0.543 L 4.644 0.601 L 4.798 0.62 L 4.952 0.601 L 5.097 0.543 L 5.222 0.452 L 5.321 0.332 L 5.388 0.192 L 5.417 0.039 L 5.407 -0.116 L 5.359 -0.264 L 5.276 -0.395 L 5.162 -0.502 L 5.026 -0.576 L 4.876 -0.615 L 4.72 -0.615 L 4.57 -0.576 L 4.434 -0.502 L 4.32 -0.395 L 4.237 -0.264 L 4.189 -0.116 L 4.179 0.039 L 4.208 0.192 L 4.275 0.332 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -21.858 3.475 L -21.43 3.469 L -19.492 3.442 L -15.941 3.185 L -13.521 2.867 L -10.792 2.297 L -9.679 1.957 L -8.76 1.586 L -8.051 1.187 L -7.769 0.972 L -7.544 0.748 L -7.376 0.513 L -7.269 0.261 L -7.232 0.0 L -7.269 -0.261 L -7.376 -0.513 L -7.544 -0.748 L -7.769 -0.972 L -8.051 -1.187 L -8.76 -1.586 L -9.679 -1.957 L -10.792 -2.297 L -13.521 -2.867 L -15.941 -3.185 L -19.492 -3.442 L -23.219 -3.493 L -26.888 -3.338 L -30.267 -2.984 L -31.789 -2.739 L -34.354 -2.132 L -35.373 -1.775 L -36.191 -1.389 L -36.795 -0.976 L -37.024 -0.748 L -37.192 -0.513 L -37.299 -0.261 L -37.336 0.0 L -37.299 0.261 L -37.192 0.513 L -37.024 0.748 L -36.795 0.976 L -36.191 1.389 L -35.373 1.775 L -34.354 2.132 L -31.789 2.739 L -30.267 2.984 L -26.888 3.338 L -23.219 3.493 L -21.858 3.475 L -21.858 3.475 L -21.858 3.475 L -21.858 3.475 M -5.586 -0.168 L -5.591 -0.154 L -5.604 0.051 L -5.566 0.255 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.586 -0.168 L -5.586 -0.168 L -5.586 -0.168 L -5.586 -0.168 M -39.101 0.452 L -39.091 0.44 L -39.002 0.255 L -38.964 0.051 L -38.977 -0.154 L -39.041 -0.35 L -39.151 -0.523 L -39.302 -0.665 L -39.482 -0.763 L -39.68 -0.815 L -39.888 -0.815 L -40.086 -0.763 L -40.266 -0.665 L -40.417 -0.523 L -40.527 -0.35 L -40.591 -0.154 L -40.604 0.051 L -40.566 0.255 L -40.477 0.44 L -40.346 0.599 L -40.18 0.719 L -39.988 0.796 L -39.784 0.822 L -39.58 0.796 L -39.388 0.719 L -39.222 0.599 L -39.101 0.452 L -39.101 0.452 L -39.101 0.452 L -39.101 0.452 M 22.724 3.475 L 23.152 3.469 L 25.09 3.442 L 28.641 3.185 L 31.061 2.867 L 33.79 2.297 L 34.903 1.957 L 35.822 1.586 L 36.531 1.187 L 36.813 0.972 L 37.038 0.748 L 37.206 0.513 L 37.313 0.261 L 37.35 0.0 L 37.313 -0.261 L 37.206 -0.513 L 37.038 -0.748 L 36.813 -0.972 L 36.531 -1.187 L 35.822 -1.586 L 34.903 -1.957 L 33.79 -2.297 L 31.061 -2.867 L 28.641 -3.185 L 25.09 -3.442 L 21.363 -3.493 L 17.694 -3.338 L 14.315 -2.984 L 12.793 -2.739 L 10.228 -2.132 L 9.209 -1.775 L 8.391 -1.389 L 7.787 -0.976 L 7.558 -0.748 L 7.39 -0.513 L 7.283 -0.261 L 7.246 0.0 L 7.283 0.261 L 7.39 0.513 L 7.558 0.748 L 7.787 0.976 L 8.391 1.389 L 9.209 1.775 L 10.228 2.132 L 12.793 2.739 L 14.315 2.984 L 17.694 3.338 L 21.363 3.493 L 22.724 3.475 L 22.724 3.475 L 22.724 3.475 L 22.724 3.475 M 38.996 -0.168 L 38.991 -0.154 L 38.978 0.051 L 39.016 0.255 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.996 -0.168 L 38.996 -0.168 L 38.996 -0.168 L 38.996 -0.168 M 5.481 0.452 L 5.491 0.44 L 5.58 0.255 L 5.618 0.051 L 5.605 -0.154 L 5.541 -0.35 L 5.431 -0.523 L 5.28 -0.665 L 5.1 -0.763 L 4.902 -0.815 L 4.694 -0.815 L 4.496 -0.763 L 4.316 -0.665 L 4.165 -0.523 L 4.055 -0.35 L 3.991 -0.154 L 3.978 0.051 L 4.016 0.255 L 4.105 0.44 L 4.236 0.599 L 4.402 0.719 L 4.594 0.796 L 4.798 0.822 L 5.002 0.796 L 5.194 0.719 L 5.36 0.599 L 5.481 0.452 L 5.481 0.452 L 5.481 0.452 L 5.481 0.452' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -24.974 3.699 L -26.749 3.674 L -31.903 3.179 L -33.72 2.885 L -36.1 2.357 L -37.986 1.74 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -37.986 -1.74 L -36.1 -2.357 L -33.72 -2.885 L -31.903 -3.179 L -26.749 -3.674 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 L -24.974 -3.699 M -21.426 -3.748 L -20.033 -3.768 L -14.64 -3.42 L -10.846 -2.885 L -8.466 -2.356 L -7.154 -1.955 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -7.154 1.955 L -8.466 2.356 L -10.846 2.885 L -14.64 3.42 L -20.033 3.768 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 L -21.426 3.748 M -33.891 -2.556 L -33.87 -2.535 L -34.327 -2.426 L -34.354 -2.454 L -34.755 -2.289 L -34.818 -2.352 L -35.174 -2.142 L -35.282 -2.25 L -35.583 -1.986 L -35.746 -2.148 L -35.968 -1.804 L -36.195 -2.031 L -36.349 -1.62 L -36.621 -1.892 L -37.047 -1.753 L -36.685 -1.39 L -37.014 -1.153 L -37.474 -1.613 L -37.899 -1.472 L -37.287 -0.861 L -37.499 -0.507 L -38.289 -1.298 L -38.68 -1.123 L -37.611 -0.054 L -37.351 0.773 L -39.62 -1.497 L -39.784 -1.095 L -40.15 -1.461 L -40.555 -1.3 L -40.248 -0.994 L -40.577 -0.757 L -40.872 -1.052 L -41.114 -0.728 L -40.801 -0.415 L -41.261 -0.309 L -40.886 0.066 L -41.269 0.249 L -40.034 1.484 L -39.857 1.095 L -39.471 1.48 L -39.057 1.328 L -39.371 1.015 L -39.023 0.797 L -38.698 1.122 L -38.792 0.463 L -37.723 1.532 L -36.882 1.806 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 L -38.686 0.003 M -36.837 1.286 L -36.042 2.081 L -35.562 1.996 L -35.315 2.243 L -34.675 2.316 L -34.59 2.402 L -33.898 2.528 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 L -33.865 2.561 M -10.69 2.543 L -10.665 2.568 L -10.252 2.415 L -10.204 2.463 L -9.814 2.288 L -9.743 2.359 L -9.393 2.143 L -9.282 2.254 L -8.99 1.98 L -8.821 2.15 L -8.592 1.812 L -8.37 2.034 L -8.23 1.609 L -7.937 1.902 L -7.504 1.769 L -7.871 1.402 L -7.554 1.153 L -7.084 1.623 L -6.684 1.458 L -7.281 0.861 L -7.069 0.507 L -6.283 1.293 L -5.882 1.128 L -6.957 0.054 L -7.217 -0.773 L -4.944 1.501 L -4.776 1.103 L -4.416 1.463 L -4.018 1.296 L -4.32 0.994 L -3.99 0.758 L -3.702 1.046 L -3.463 0.719 L -3.768 0.414 L -3.31 0.307 L -3.691 -0.075 L -3.293 -0.243 L -4.543 -1.492 L -4.711 -1.095 L -5.089 -1.473 L -5.499 -1.317 L -5.201 -1.019 L -5.54 -0.792 L -5.871 -1.123 L -5.783 -0.47 L -6.833 -1.52 L -7.712 -1.833 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 M -7.77 -1.325 L -8.527 -2.082 L -8.991 -1.981 L -9.26 -2.249 L -9.884 -2.308 L -9.991 -2.415 L -10.682 -2.541 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 L -10.723 -2.581 M 19.608 3.699 L 17.833 3.674 L 12.679 3.179 L 10.862 2.885 L 8.482 2.357 L 6.596 1.74 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.596 -1.74 L 8.482 -2.357 L 10.862 -2.885 L 12.679 -3.179 L 17.833 -3.674 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 L 19.608 -3.699 M 23.156 -3.748 L 24.549 -3.768 L 29.942 -3.42 L 33.736 -2.885 L 36.116 -2.356 L 37.428 -1.955 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 37.428 1.955 L 36.116 2.356 L 33.736 2.885 L 29.942 3.42 L 24.549 3.768 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 L 23.156 3.748 M 10.691 -2.556 L 10.712 -2.535 L 10.255 -2.426 L 10.228 -2.454 L 9.827 -2.289 L 9.764 -2.352 L 9.408 -2.142 L 9.3 -2.25 L 8.999 -1.986 L 8.836 -2.148 L 8.614 -1.804 L 8.387 -2.031 L 8.233 -1.62 L 7.961 -1.892 L 7.535 -1.753 L 7.897 -1.39 L 7.568 -1.153 L 7.108 -1.613 L 6.683 -1.472 L 7.295 -0.861 L 7.083 -0.507 L 6.293 -1.298 L 5.902 -1.123 L 6.971 -0.054 L 7.231 0.773 L 4.962 -1.497 L 4.798 -1.095 L 4.432 -1.461 L 4.027 -1.3 L 4.334 -0.994 L 4.005 -0.757 L 3.71 -1.052 L 3.468 -0.728 L 3.781 -0.415 L 3.321 -0.309 L 3.696 0.066 L 3.313 0.249 L 4.548 1.484 L 4.725 1.095 L 5.111 1.48 L 5.525 1.328 L 5.211 1.015 L 5.559 0.797 L 5.884 1.122 L 5.79 0.463 L 6.859 1.532 L 7.7 1.806 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 L 5.896 0.003 M 7.745 1.286 L 8.54 2.081 L 9.02 1.996 L 9.267 2.243 L 9.907 2.316 L 9.992 2.402 L 10.684 2.528 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 L 10.717 2.561 M 33.892 2.543 L 33.917 2.568 L 34.33 2.415 L 34.378 2.463 L 34.768 2.288 L 34.839 2.359 L 35.189 2.143 L 35.3 2.254 L 35.592 1.98 L 35.761 2.15 L 35.99 1.812 L 36.212 2.034 L 36.352 1.609 L 36.645 1.902 L 37.078 1.769 L 36.711 1.402 L 37.028 1.153 L 37.498 1.623 L 37.898 1.458 L 37.301 0.861 L 37.513 0.507 L 38.299 1.293 L 38.7 1.128 L 37.625 0.054 L 37.365 -0.773 L 39.638 1.501 L 39.806 1.103 L 40.166 1.463 L 40.564 1.296 L 40.262 0.994 L 40.592 0.758 L 40.88 1.046 L 41.119 0.719 L 40.814 0.414 L 41.272 0.307 L 40.891 -0.075 L 41.289 -0.243 L 40.039 -1.492 L 39.871 -1.095 L 39.493 -1.473 L 39.083 -1.317 L 39.381 -1.019 L 39.042 -0.792 L 38.711 -1.123 L 38.799 -0.47 L 37.749 -1.52 L 36.87 -1.833 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 M 36.812 -1.325 L 36.055 -2.082 L 35.591 -1.981 L 35.322 -2.249 L 34.698 -2.308 L 34.591 -2.415 L 33.9 -2.541 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581 L 33.859 -2.581' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+	</g>
+<!--End Layer Data-->
+<!--beginningOfControlSection='true' must be there or else the control boxes will be carved-->
+	<g id='controls' beginningOfControlSection='true' inkscape:groupmode='layer' inkscape:label='Controls'>
+<!--id='isoControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='isoControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<circle id='globe' cx='120' cy='120' fill='gray' r='100' />
+			<circle id='cover' cx='120' cy='120' fill='silver' r='33' />
+			<circle id='observer' fill='darkslateblue' r='12' />
+			<text id='latitudeIso' x='20' y='260' >Latitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude-1.0)' x='198' y='260' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude+1.0)' x='213' y='260' >&gt;</text>
+			<text id='longitudeIso' x='20' y='280' >Longitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude-1.0)' x='198' y='280' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude+1.0)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleIso' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXIso' y='20' >X: -44.451 mm</text>
+				<text id='minYIso' y='40' >Y: -6.474 mm</text>
+				<text id='minZIso' y='60' >Z: 0.335 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXIso' y='20' >X: 44.433 mm</text>
+				<text id='maxYIso' y='40' >Y: 6.474 mm</text>
+				<text id='maxZIso' y='60' >Z: 1.685 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXIso' y='20' >X: 88.884 mm</text>
+				<text id='dimYIso' y='40' >Y: 12.948 mm</text>
+				<text id='dimZIso' y='60' >Z: 1.35 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightIso' y='20' >Layer Height: 0.27 mm</text>
+				<text id='numberOfLayersIso' y='40' >Number of Layers: 5</text>
+				<text id='volumeIso' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='layerControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='layerControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+<!--<path stroke='#000' stroke-width='3' d='M 20 20 h5 l-5 -10 l-5 10 h5 v35 h35 v-5 l10 5 l-10 5 v-5 h-35 z'/>-->
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text id='minIndexLayer' x='20' y='245' >0</text>
+			<rect id='slider' fill='gray' height='24' width='170' x='32' y='230' />
+			<circle id='thumb' cx='42' cy='242' fill='darkslateblue' r='12' />
+			<text id='maxIndexLayer' x='203' y='245' >1</text>
+			<text id='currentIndexLayer' x='20' y='280' >Layer</text>
+			<text id='decreaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex-1)' x='198' y='280' >&lt;</text>
+			<text id='increaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex+1)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleLayer' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXLayer' y='20' >X: -44.451 mm</text>
+				<text id='minYLayer' y='40' >Y: -6.474 mm</text>
+				<text id='minZLayer' y='60' >Z: 0.335 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXLayer' y='20' >X: 44.433 mm</text>
+				<text id='maxYLayer' y='40' >Y: 6.474 mm</text>
+				<text id='maxZLayer' y='60' >Z: 1.685 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXLayer' y='20' >X: 88.884 mm</text>
+				<text id='dimYLayer' y='40' >Y: 12.948 mm</text>
+				<text id='dimZLayer' y='60' >Z: 1.35 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightLayer' y='20' >Layer Height: 0.27 mm</text>
+				<text id='numberOfLayersLayer' y='40' >Number of Layers: 5</text>
+				<text id='volumeLayer' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='scrollControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='scrollControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='visible'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleScroll' x='65' y='300' >: 1</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXScroll' y='20' >X: -44.451 mm</text>
+				<text id='minYScroll' y='40' >Y: -6.474 mm</text>
+				<text id='minZScroll' y='60' >Z: 0.335 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXScroll' y='20' >X: 44.433 mm</text>
+				<text id='maxYScroll' y='40' >Y: 6.474 mm</text>
+				<text id='maxZScroll' y='60' >Z: 1.685 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXScroll' y='20' >X: 88.884 mm</text>
+				<text id='dimYScroll' y='40' >Y: 12.948 mm</text>
+				<text id='dimZScroll' y='60' >Z: 1.35 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightScroll' y='20' >Layer Height: 0.27 mm</text>
+				<text id='numberOfLayersScroll' y='40' >Number of Layers: 5</text>
+				<text id='volumeScroll' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+		<text id='isoViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewIso()' text-anchor='middle' visibility='visible' x='80' y='30' >[Iso View]</text>
+		<text id='isoViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='76' y='30' >Iso View</text>
+		<text id='layerViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewLayer()' text-anchor='middle' visibility='visible' x='240' y='30' >[Layer View]</text>
+		<text id='layerViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='236' y='30' >Layer View</text>
+		<text id='scrollViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewScroll()' text-anchor='middle' visibility='hidden' x='400' y='30' >[Scroll View]</text>
+		<text id='scrollViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='visible' x='396' y='30' >Scroll View</text>
+	</g>
+</svg>

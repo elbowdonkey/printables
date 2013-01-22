@@ -1,0 +1,526 @@
+<?xml version='1.0' standalone='no'?>
+<!--Written in KDevelop (http://www.kdevelop.org/)-->
+<svg baseProfile='full' contentScriptType='text/ecmascript' contentStyleType='text/css' height='780.0px' onload='init()' preserveAspectRatio='xMidYMid meet' version='1.0' width='516.0px' xmlns='http://www.w3.org/2000/svg' xmlns:inkscape='http://www.inkscape.org/namespaces/inkscape' xmlns:slice='http://www.reprap.org/slice' xmlns:xlink='http://www.w3.org/1999/xlink' zoomAndPan='magnify'>
+	<metadata>
+		<slice:layers id='sliceData' controlBoxHeight='720' controlBoxWidth='240' decimalPlacesCarried='3' edgeWidth='0.4' layerHeight='0.2' margin='20' marginTop='60' maxX='44.433' maxY='6.474' maxZ='0.9' minX='-44.451' minY='-6.474' minZ='0.3' procedureName='vectorwrite' svgMinWidth='516' template='svg_layer' textHeight='22.5' unitScale='3.7' version='0.1' yAxisPointingUpward='true' />
+	</metadata>
+	<script type='text/ecmascript'>
+<![CDATA[
+globalMetadata = document.getElementsByTagNameNS('http://www.reprap.org/slice', 'layers')[0];
+globalSliceMinX = globalMetadata.getAttribute('minX') * 1;
+globalSliceMaxX = globalMetadata.getAttribute('maxX') * 1;
+globalSliceMinY = globalMetadata.getAttribute('minY') * 1;
+globalSliceMaxY = globalMetadata.getAttribute('maxY') * 1;
+globalSliceMinZ = globalMetadata.getAttribute('minZ') * 1;
+globalSliceMaxZ = globalMetadata.getAttribute('maxZ') * 1;
+
+//Control var's
+globalLayerIndex = 0; //Number of currently viewed layer (zero index)
+globalLatitude = 60.0;
+globalLongitude = 45.0;
+globalControlBoxHeight = globalMetadata.getAttribute('controlBoxHeight') * 1;
+globalControlBoxWidth = globalMetadata.getAttribute('controlBoxWidth') * 1;
+globalSliding = false;
+globalObserving = false
+
+//Display var's
+globalMargin = globalMetadata.getAttribute('margin') * 1;
+globalMarginTop = globalMetadata.getAttribute('marginTop') * 1;
+globalDimensionX = globalSliceMaxX - globalSliceMinX;
+globalDimensionY = globalSliceMaxY - globalSliceMinY;
+globalDimensionZ = globalSliceMaxZ - globalSliceMinZ;
+magnitudeXYSquared = globalDimensionX * globalDimensionX + globalDimensionY * globalDimensionY;
+globalDimensionMagnitude = Math.sqrt(magnitudeXYSquared + globalDimensionZ * globalDimensionZ);
+globalGlobeTravelRadian = 0.0;
+globalGlobeInnerObserverRadius = 0.0;
+globalTextHeight = globalMetadata.getAttribute('textHeight') * 1.0;
+globalUnitScale = globalMetadata.getAttribute('unitScale') * 1.0;
+globalXOffset = globalControlBoxWidth + globalMargin + globalMargin;
+globalYOffset = globalMargin + globalMarginTop;
+globalZoomScale = 1.0; //Default 1:1 may need smaller scale for large objects
+globalScale = globalUnitScale * globalZoomScale;
+
+//Globals to be set in init
+globalLayers = [];
+globalSlider = 0;
+globalThumb = 0;
+globalThumbRadius = 0.0;
+globalSliderWidthMinusDiameter = 0.0;
+
+
+function changeScale(newScale) {
+	globalZoomScale = newScale;
+	globalScale = globalUnitScale * globalZoomScale;
+	if (globalZoomScale >=1) { //dont scale line thickness for large display scale
+		document.getElementById('layerData').setAttributeNS(null, 'stroke-width', 2.0 / (globalScale));
+	}
+}
+
+function changeScaleIso(newScale) {
+	changeScale(newScale);
+	viewIso();
+}
+
+function changeScaleLayer(newScale) {
+	changeScale(newScale);
+	viewLayer();
+}
+
+function changeScaleScroll(newScale) {
+	changeScale(newScale);
+	viewScroll();
+}
+
+function displayIso(latitude, longitude) {
+	latitude = Math.max(0.0, latitude);
+	latitude = Math.min(89.0, latitude);
+	globalLatitude = Math.round(latitude);
+	globalLongitude = Math.round((longitude + 540.0) % 360.0) - 180.0;
+	latitudeRadians = getRadians(globalLatitude);
+	longitudeWiddershinsRadians = getRadians(90.0 - globalLongitude);
+	unitX = Math.cos(longitudeWiddershinsRadians);
+	unitY = Math.sin(longitudeWiddershinsRadians);
+	latitudeOverLayers = globalDimensionZ / globalLayers.length;
+	globalOneOverUnitScaleString = (1.0 / globalUnitScale).toString();
+	yScale = -1.0 * globalScale * Math.cos(latitudeRadians);
+	scaleRotateCenterString = ' scale(' + globalScale + ', ' + yScale + ')';
+	scaleRotateCenterString += ' rotate(' + (-1.0 * globalLongitude).toString() + ')';
+	centerX = (-0.5 * globalDimensionX - globalSliceMinX).toString();
+	centerY = (-0.5 * globalDimensionY - globalSliceMinY).toString();
+	scaleRotateCenterString += ' translate(' + centerX + ', ' + centerY + ')';
+	x = 0.5 * globalDimensionMagnitude * globalScale + globalXOffset;
+	halfLengthMinusOne = 0.5 * (globalLayers.length - 1);
+	for (var i in globalLayers) {
+		latitudeZSin = Math.sin(latitudeRadians) * (i - halfLengthMinusOne) * latitudeOverLayers
+		y = globalScale * (0.5 * globalDimensionMagnitude - latitudeZSin) + globalYOffset;
+//		y = globalDimensionY * globalScale + globalYOffset - i * unitY * latitudeOverLayers;
+		transformString = ' translate(' + x + ', ' + y + ')';
+		globalLayers[i].setAttributeNS(null, 'transform', transformString + scaleRotateCenterString);
+	}
+	setText('latitudeIso', 'Latitude: ' + globalLatitude.toString() + '°');
+	setText('longitudeIso', 'Longitude: ' + globalLongitude.toString() + '°');
+	globeMoveableRadius = globalGlobeTravelRadian * latitudeRadians + globalGlobeInnerObserverRadius;
+	globalObserver.setAttribute('cx', globalGlobeCenterX + unitX * globeMoveableRadius);
+	globalObserver.setAttribute('cy', globalGlobeCenterY - unitY * globeMoveableRadius);
+}
+
+function displayIsoByLatitude(latitude) {
+	displayIso(latitude, globalLongitude);
+}
+
+function displayIsoByLongitude(longitude) {
+	displayIso(globalLatitude, longitude);
+}
+
+function displayLayer(layerNum) {
+	if (globalLayers.length <= 1) {
+		document.getElementById('maxIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		document.getElementById('minIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		globalSlider.setAttributeNS(null, 'visibility', 'hidden');
+		globalThumb.setAttributeNS(null, 'visibility', 'hidden');
+	}
+	if (layerNum <= 0) {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum >= globalLayers.length - 1) {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum < 0 || layerNum >= globalLayers.length) {
+		return
+	}
+	globalLayers[globalLayerIndex].setAttributeNS(null, 'visibility', 'hidden');
+	currentLayerElement = globalLayers[layerNum]
+	currentLayerElement.setAttributeNS(null, 'visibility', 'visible');
+	globalLayerIndex = layerNum;
+	setText('currentIndexLayer', 'Layer: ' + globalLayerIndex.toString() + ', ' + currentLayerElement.getAttribute('id'));
+	//Slider
+	if (!globalSliding) {
+		placeThumb(globalSliderWidthMinusDiameter / (globalLayers.length - 1) * globalLayerIndex + globalThumbRadius);
+	}
+}
+
+function getDegrees(radians) {
+	return radians / Math.PI * 180.0;
+}
+
+function getRadians(degrees) {
+	return degrees / 180.0 * Math.PI;
+}
+
+function getScaleTransformString(scale) {
+	scaleTransformString = 'scale(' + scale + ' ' + (scale * - 1)
+	return scaleTransformString + ') translate(' + (globalSliceMinX * - 1) + ' ' + (globalSliceMinY * - 1) + ')';
+}
+
+function getWidth() {
+	return (globalDimensionX * globalScale) + globalXOffset
+}
+
+function hideElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'hidden');
+	}
+}
+
+function init() {
+	//Find only layer groups
+	globe = document.getElementById('globe');
+	globalGlobeCenterX = globe.getAttribute('cx') * 1;
+	globalGlobeCenterXWindow = globalGlobeCenterX + globalMargin;
+	globalGlobeCenterY = globe.getAttribute('cy') * 1;
+	globalGlobeCenterYWindow = globalGlobeCenterX + globalMarginTop;
+	globalObserver = document.getElementById('observer');
+	globeRadius = globe.getAttribute('r') * 1.0;
+	observerRadius = globalObserver.getAttribute('r') * 1.0;
+	globalGlobeInnerObserverRadius = document.getElementById('cover').getAttribute('r') * 1.0 + observerRadius;
+	globalGlobeTravelRadian = getDegrees(globeRadius - globalGlobeInnerObserverRadius - observerRadius) / 89.0;
+	globalSlider = document.getElementById('slider');
+	globalSliderX = globalSlider.getAttribute('x') * 1;
+	globalSliderXWindow = globalSliderX + globalMargin
+	globalThumb = document.getElementById('thumb');
+	globalThumbRadius = globalThumb.getAttribute('r') * 1;
+	globalSliderWidthMinusRadius = globalSlider.getAttribute('width') * 1 - globalThumbRadius;
+	globalSliderWidthMinusDiameter = globalSliderWidthMinusRadius - globalThumbRadius;
+	var allGroups = document.getElementsByTagName('g');
+	for (var i = 0; i < allGroups.length; i++) {
+		if (allGroups[i].id.indexOf('z:') == 0) {
+			globalLayers.push(allGroups[i]);
+		}
+	}
+
+	//Slider
+	layerControlBox = document.getElementById('layerControlBox');
+	layerControlBox.addEventListener('mouseup', sliderUp, false);
+	layerControlBox.addEventListener('mousemove', sliderMove, false);
+	globalSlider.addEventListener('mousedown', sliderDownMove, false);
+	globalThumb.addEventListener('mousedown', sliderDownMove, false);
+	//Observer
+	isoControlBox = document.getElementById('isoControlBox');
+	isoControlBox.addEventListener('mouseup', observerUp, false);
+	isoControlBox.addEventListener('mousemove', observerMove, false);
+	globe.addEventListener('mousedown', observerDownMove, false);
+	globalObserver.addEventListener('mousedown', observerDownMove, false);
+	
+	//Control box data
+	setText('maxIndexLayer', globalLayers.length - 1);
+	changeScaleLayer(globalZoomScale);
+}
+
+function observerDown(event) {
+	globalObserving = true;
+}
+
+function observerDownMove(event) {
+	globalObserving = true;
+	observerMove(event);
+}
+
+function observerMove(event) {
+	if (!globalObserving) {
+		return;
+	}
+	observerX = event.clientX - globalGlobeCenterXWindow + window.pageXOffset;
+	observerY = event.clientY - globalGlobeCenterYWindow + window.pageYOffset;
+	distanceFromCenter = Math.sqrt(observerX * observerX + observerY * observerY);
+	latitudeRadians = (distanceFromCenter - globalGlobeInnerObserverRadius) / globalGlobeTravelRadian;
+	longitudeRadians = Math.atan2(observerX, -observerY);
+	displayIso(getDegrees(latitudeRadians), getDegrees(longitudeRadians));
+}
+
+function observerUp(event) {
+	globalObserving = false;
+}
+
+function placeThumb(value) {
+	if (globalLayers.length > 1) {
+		globalThumb.setAttribute('cx', globalSliderX + value);
+	}
+}
+
+function setScaleText(scaleID) {
+	setText(scaleID, ': ' + globalZoomScale);
+}
+
+function setSVG(width, height) {
+	rootSVG = document.getElementsByTagName('svg')[0];
+	svgMinWidth = globalMetadata.getAttribute('svgMinWidth') * 1;
+	height = Math.max(globalControlBoxHeight + globalMargin + globalMarginTop, height);
+	width = Math.max(svgMinWidth, width);
+	rootSVG.setAttributeNS(null, 'width', width + 'px')
+	rootSVG.setAttributeNS(null, 'height', height + 'px')
+}
+
+function setText(id, str) {
+	e = document.getElementById(id)
+	if (e != null)
+		e.firstChild.nodeValue = str;
+}
+
+function showElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'visible');
+	}
+}
+
+function sliderDown(event) {
+	globalSliding = true;
+}
+
+function sliderDownMove(event) {
+	globalSliding = true;
+	sliderMove(event);
+}
+
+function sliderMove(event) {
+	if (!globalSliding) {
+		return;
+	}
+	value = event.clientX - globalSliderXWindow + window.pageXOffset;
+	if (value >= globalThumbRadius && value <= globalSliderWidthMinusRadius) {
+		placeThumb(value);
+		zoneWidth = globalSliderWidthMinusDiameter / (globalLayers.length);
+		newLayer = Math.round((value - globalThumbRadius - 0.5 * zoneWidth) / zoneWidth)
+		if (newLayer != globalLayerIndex) {
+			displayLayer(newLayer)
+		}
+	}
+}
+
+function sliderUp(event) {
+	globalSliding = false;
+}
+
+function viewIso() {
+	height = (globalDimensionMagnitude * globalScale) + globalYOffset;
+	setSVG((globalDimensionMagnitude * globalScale) + globalXOffset, height);
+	for (var i in globalLayers) {
+//		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalMargin + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			  pathElements[pathElementIndex].setAttributeNS(null, 'transform', '');
+		  }
+	  }
+	  //show control box
+	hideElements(['decreaseLayerIndex', 'increaseLayerIndex', 'isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollControlBox', 'scrollViewLabel']);
+	showElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollViewButton']);
+	displayIso(globalLatitude, globalLongitude);
+	setScaleText('scaleIso');
+}
+
+function viewLayer() {
+	//Set svg size and view port
+	height = (globalDimensionY * globalScale) + globalYOffset;
+	setSVG(getWidth(), height);
+	//move and hide all layers 
+	for (var i in globalLayers) {
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalXOffset + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'hidden');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		transform = getScaleTransformString(globalScale);
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	showElements(['isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	
+	//show current layer
+	displayLayer(globalLayerIndex);
+	setScaleText('scaleLayer');
+}
+
+function viewScroll() {
+	//Set svg size and view port
+	yDimensionScale = globalDimensionY * globalScale
+	singleHeight = (globalMargin + yDimensionScale + globalTextHeight)
+	height = globalLayers.length * singleHeight + globalMargin + globalMargin + globalYOffset;
+	setSVG(getWidth(), height);
+
+	//move and show all layers 
+	for (var i in globalLayers) {
+		x = globalXOffset;
+		y = i * singleHeight + yDimensionScale + globalYOffset;
+		transform = getScaleTransformString(globalScale);
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + x + ', ' + y + ')');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'visible');
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	showElements(['isoViewButton', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	setScaleText('scaleScroll');
+}
+	]]>
+	</script>
+	<title >spring.gcode - Slice Layers</title>
+<!--Begin Layer Data   -->
+	<g id='layerData' fill='#556B2F' fill-rule='evenodd' font-family='Arial' font-size='15px' font-weight='bold' inkscape:groupmode='layer' inkscape:label='Slice Layers' stroke='#00F' stroke-width='0.54px'>
+<!--id='sliceElementTemplate' must be there or else the slice template will not be found-->
+		<g id='z:0.4' inkscape:groupmode='layer' inkscape:label='Layer 0, z:0.4' transform='translate(280.0, 127.908)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.4' fill='#000' stroke='none' y='15' >Layer 0, z:0.4</text>
+			<path d='M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -37.784 0.0 L -37.847 0.497 L -38.081 1.043 L -37.985 1.225 L -36.875 1.782 L -35.754 2.175 L -34.421 2.533 L -32.071 2.993 L -27.429 3.519 L -23.33 3.693 L -19.164 3.634 L -15.195 3.348 L -13.363 3.124 L -10.147 2.533 L -8.814 2.175 L -7.693 1.782 L -6.598 1.234 L -6.508 1.001 L -6.594 0.852 L -6.749 0.375 L -6.78 -0.126 L -6.686 -0.618 L -6.594 -0.852 L -6.433 -1.131 L -7.219 -1.575 L -8.226 -1.983 L -10.147 -2.533 L -13.363 -3.124 L -17.139 -3.519 L -21.238 -3.693 L -27.429 -3.519 L -32.071 -2.993 L -35.113 -2.358 L -36.342 -1.983 L -37.349 -1.575 L -38.136 -1.131 L -37.924 -0.736 L -37.847 -0.497 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.262 0.395 L -40.148 0.502 L -40.012 0.576 L -39.862 0.615 L -39.706 0.615 L -39.556 0.576 L -39.42 0.502 L -39.306 0.395 L -39.223 0.264 L -39.175 0.116 L -39.165 -0.039 L -39.194 -0.192 L -39.261 -0.332 L -39.36 -0.452 L -39.485 -0.543 L -39.63 -0.601 L -39.784 -0.62 L -39.938 -0.601 L -40.083 -0.543 L -40.208 -0.452 L -40.307 -0.332 L -40.374 -0.192 L -40.403 -0.039 L -40.393 0.116 L -40.345 0.264 z M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 6.798 0.0 L 6.735 0.497 L 6.501 1.043 L 6.597 1.225 L 7.707 1.782 L 8.828 2.175 L 10.161 2.533 L 12.511 2.993 L 17.153 3.519 L 21.252 3.693 L 25.418 3.634 L 29.387 3.348 L 31.219 3.124 L 34.435 2.533 L 35.768 2.175 L 36.889 1.782 L 37.984 1.234 L 38.074 1.001 L 37.988 0.852 L 37.833 0.375 L 37.802 -0.126 L 37.896 -0.618 L 37.988 -0.852 L 38.149 -1.131 L 37.363 -1.575 L 36.356 -1.983 L 34.435 -2.533 L 31.219 -3.124 L 27.443 -3.519 L 23.344 -3.693 L 17.153 -3.519 L 12.511 -2.993 L 9.469 -2.358 L 8.24 -1.983 L 7.233 -1.575 L 6.446 -1.131 L 6.658 -0.736 L 6.735 -0.497 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.32 0.395 L 4.434 0.502 L 4.57 0.576 L 4.72 0.615 L 4.876 0.615 L 5.026 0.576 L 5.162 0.502 L 5.276 0.395 L 5.359 0.264 L 5.407 0.116 L 5.417 -0.039 L 5.388 -0.192 L 5.321 -0.332 L 5.222 -0.452 L 5.097 -0.543 L 4.952 -0.601 L 4.798 -0.62 L 4.644 -0.601 L 4.499 -0.543 L 4.374 -0.452 L 4.275 -0.332 L 4.208 -0.192 L 4.179 -0.039 L 4.189 0.116 L 4.237 0.264 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -6.44 1.371 L -6.435 1.368 L -6.287 0.984 L -6.41 0.77 L -6.551 0.337 L -6.579 -0.113 L -6.493 -0.562 L -6.413 -0.765 L -6.159 -1.206 L -7.132 -1.756 L -8.161 -2.172 L -10.101 -2.728 L -13.334 -3.322 L -17.124 -3.719 L -21.237 -3.893 L -27.443 -3.719 L -32.103 -3.191 L -35.163 -2.552 L -36.409 -2.172 L -37.436 -1.756 L -38.405 -1.209 L -38.109 -0.657 L -38.043 -0.453 L -37.986 0.0 L -38.042 0.447 L -38.21 0.873 L -38.311 1.034 L -38.137 1.366 L -37.861 1.538 L -36.951 1.967 L -35.813 2.366 L -34.466 2.728 L -32.102 3.191 L -27.445 3.719 L -23.333 3.893 L -19.155 3.834 L -15.176 3.547 L -13.333 3.322 L -10.103 2.728 L -8.755 2.366 L -7.617 1.967 L -6.707 1.538 L -6.44 1.371 L -6.44 1.371 L -6.44 1.371 L -6.44 1.371 M -5.35 0.595 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.566 0.255 L -5.477 0.44 L -5.35 0.595 L -5.35 0.595 L -5.35 0.595 L -5.35 0.595 M -38.964 -0.045 L -38.964 -0.051 L -39.002 -0.255 L -39.091 -0.44 L -39.222 -0.599 L -39.388 -0.719 L -39.58 -0.796 L -39.784 -0.822 L -39.988 -0.796 L -40.18 -0.719 L -40.346 -0.599 L -40.477 -0.44 L -40.566 -0.255 L -40.604 -0.051 L -40.591 0.154 L -40.527 0.35 L -40.417 0.523 L -40.266 0.665 L -40.086 0.763 L -39.888 0.815 L -39.68 0.815 L -39.482 0.763 L -39.302 0.665 L -39.151 0.523 L -39.041 0.35 L -38.977 0.154 L -38.964 -0.045 L -38.964 -0.045 L -38.964 -0.045 L -38.964 -0.045 M 38.142 1.371 L 38.147 1.368 L 38.295 0.984 L 38.172 0.77 L 38.031 0.337 L 38.003 -0.113 L 38.089 -0.562 L 38.169 -0.765 L 38.423 -1.206 L 37.45 -1.756 L 36.421 -2.172 L 34.481 -2.728 L 31.248 -3.322 L 27.458 -3.719 L 23.345 -3.893 L 17.139 -3.719 L 12.479 -3.191 L 9.419 -2.552 L 8.173 -2.172 L 7.146 -1.756 L 6.177 -1.209 L 6.473 -0.657 L 6.539 -0.453 L 6.596 0.0 L 6.54 0.447 L 6.372 0.873 L 6.271 1.034 L 6.445 1.366 L 6.721 1.538 L 7.631 1.967 L 8.769 2.366 L 10.116 2.728 L 12.48 3.191 L 17.137 3.719 L 21.249 3.893 L 25.427 3.834 L 29.406 3.547 L 31.249 3.322 L 34.479 2.728 L 35.827 2.366 L 36.965 1.967 L 37.875 1.538 L 38.142 1.371 L 38.142 1.371 L 38.142 1.371 L 38.142 1.371 M 39.232 0.595 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 39.016 0.255 L 39.105 0.44 L 39.232 0.595 L 39.232 0.595 L 39.232 0.595 L 39.232 0.595 M 5.618 -0.045 L 5.618 -0.051 L 5.58 -0.255 L 5.491 -0.44 L 5.36 -0.599 L 5.194 -0.719 L 5.002 -0.796 L 4.798 -0.822 L 4.594 -0.796 L 4.402 -0.719 L 4.236 -0.599 L 4.105 -0.44 L 4.016 -0.255 L 3.978 -0.051 L 3.991 0.154 L 4.055 0.35 L 4.165 0.523 L 4.316 0.665 L 4.496 0.763 L 4.694 0.815 L 4.902 0.815 L 5.1 0.763 L 5.28 0.665 L 5.431 0.523 L 5.541 0.35 L 5.605 0.154 L 5.618 -0.045 L 5.618 -0.045 L 5.618 -0.045 L 5.618 -0.045' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -44.451 0.0 L -44.031 1.843 L -43.131 3.196 L -42.167 3.946 L -41.092 4.449 L -36.668 5.103 L -26.944 6.468 L 17.838 6.474 L 30.302 6.2 L 40.106 4.611 L 41.266 4.366 L 42.502 3.745 L 43.466 2.812 L 44.09 1.724 L 44.433 0.0 L 44.09 -1.724 L 43.466 -2.812 L 42.502 -3.745 L 41.266 -4.366 L 40.106 -4.611 L 30.302 -6.2 L 17.838 -6.474 L -26.944 -6.468 L -36.668 -5.103 L -41.092 -4.449 L -42.167 -3.946 L -43.131 -3.196 L -44.031 -1.843 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 M -38.269 1.613 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 M -6.272 -1.591 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 M -41.114 -0.728 L -40.8 -0.414 L -40.578 -0.758 L -40.872 -1.052 L -40.555 -1.3 L -40.248 -0.994 L -39.792 -1.103 L -40.15 -1.461 L -39.62 -1.497 L -38.289 -0.166 L -38.687 0.002 L -38.316 0.373 L -38.486 0.769 L -38.785 0.47 L -39.028 0.792 L -38.731 1.089 L -39.057 1.328 L -39.367 1.019 L -39.471 1.48 L -39.857 1.095 L -40.034 1.484 L -41.269 0.249 L -40.877 0.075 L -41.261 -0.309 L -41.261 -0.309 L -41.261 -0.309 L -41.261 -0.309 M -6.281 0.164 L -4.944 1.501 L -4.776 1.103 L -4.416 1.463 L -4.018 1.296 L -4.32 0.994 L -3.99 0.758 L -3.702 1.046 L -3.463 0.719 L -3.768 0.414 L -3.31 0.307 L -3.691 -0.075 L -3.293 -0.243 L -4.543 -1.492 L -4.711 -1.095 L -5.089 -1.473 L -5.501 -1.319 L -5.201 -1.019 L -5.54 -0.792 L -5.849 -1.101 L -6.077 -0.763 L -5.783 -0.47 L -6.245 -0.366 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 M -5.998 1.013 L -5.902 1.108 L -5.902 1.108 L -5.902 1.108 L -5.902 1.108 M 6.313 1.613 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 M 38.31 -1.591 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 M 3.468 -0.728 L 3.782 -0.414 L 4.004 -0.758 L 3.71 -1.052 L 4.027 -1.3 L 4.334 -0.994 L 4.79 -1.103 L 4.432 -1.461 L 4.962 -1.497 L 6.293 -0.166 L 5.895 0.002 L 6.266 0.373 L 6.096 0.769 L 5.797 0.47 L 5.554 0.792 L 5.851 1.089 L 5.525 1.328 L 5.215 1.019 L 5.111 1.48 L 4.725 1.095 L 4.548 1.484 L 3.313 0.249 L 3.705 0.075 L 3.321 -0.309 L 3.321 -0.309 L 3.321 -0.309 L 3.321 -0.309 M 38.301 0.164 L 39.638 1.501 L 39.806 1.103 L 40.166 1.463 L 40.564 1.296 L 40.262 0.994 L 40.592 0.758 L 40.88 1.046 L 41.119 0.719 L 40.814 0.414 L 41.272 0.307 L 40.891 -0.075 L 41.289 -0.243 L 40.039 -1.492 L 39.871 -1.095 L 39.493 -1.473 L 39.081 -1.319 L 39.381 -1.019 L 39.042 -0.792 L 38.733 -1.101 L 38.505 -0.763 L 38.799 -0.47 L 38.337 -0.366 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 M 38.584 1.013 L 38.68 1.108 L 38.68 1.108 L 38.68 1.108 L 38.68 1.108' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:0.6' inkscape:groupmode='layer' inkscape:label='Layer 1, z:0.6' transform='translate(280.0, 218.315)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.6' fill='#000' stroke='none' y='15' >Layer 1, z:0.6</text>
+			<path d='M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 6.798 0.0 L 6.735 0.497 L 6.501 1.043 L 6.597 1.225 L 7.707 1.782 L 8.828 2.175 L 10.161 2.533 L 12.511 2.993 L 17.153 3.519 L 21.252 3.693 L 25.418 3.634 L 29.387 3.348 L 31.219 3.124 L 34.435 2.533 L 35.768 2.175 L 36.889 1.782 L 37.984 1.234 L 38.074 1.001 L 37.988 0.852 L 37.833 0.375 L 37.802 -0.126 L 37.896 -0.618 L 37.988 -0.852 L 38.149 -1.131 L 37.363 -1.575 L 36.356 -1.983 L 34.435 -2.533 L 31.219 -3.124 L 27.443 -3.519 L 23.344 -3.693 L 17.153 -3.519 L 12.511 -2.993 L 9.469 -2.358 L 8.24 -1.983 L 7.233 -1.575 L 6.446 -1.131 L 6.658 -0.736 L 6.735 -0.497 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.32 0.395 L 4.434 0.502 L 4.57 0.576 L 4.72 0.615 L 4.876 0.615 L 5.026 0.576 L 5.162 0.502 L 5.276 0.395 L 5.359 0.264 L 5.407 0.116 L 5.417 -0.039 L 5.388 -0.192 L 5.321 -0.332 L 5.222 -0.452 L 5.097 -0.543 L 4.952 -0.601 L 4.798 -0.62 L 4.644 -0.601 L 4.499 -0.543 L 4.374 -0.452 L 4.275 -0.332 L 4.208 -0.192 L 4.179 -0.039 L 4.189 0.116 L 4.237 0.264 z M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -37.784 0.0 L -37.847 0.497 L -38.081 1.043 L -37.985 1.225 L -36.875 1.782 L -35.754 2.175 L -34.421 2.533 L -32.071 2.993 L -27.429 3.519 L -23.33 3.693 L -19.164 3.634 L -15.195 3.348 L -13.363 3.124 L -10.147 2.533 L -8.814 2.175 L -7.693 1.782 L -6.598 1.234 L -6.508 1.001 L -6.594 0.852 L -6.749 0.375 L -6.78 -0.126 L -6.686 -0.618 L -6.594 -0.852 L -6.433 -1.131 L -7.219 -1.575 L -8.226 -1.983 L -10.147 -2.533 L -13.363 -3.124 L -17.139 -3.519 L -21.238 -3.693 L -27.429 -3.519 L -32.071 -2.993 L -35.113 -2.358 L -36.342 -1.983 L -37.349 -1.575 L -38.136 -1.131 L -37.924 -0.736 L -37.847 -0.497 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.262 0.395 L -40.148 0.502 L -40.012 0.576 L -39.862 0.615 L -39.706 0.615 L -39.556 0.576 L -39.42 0.502 L -39.306 0.395 L -39.223 0.264 L -39.175 0.116 L -39.165 -0.039 L -39.194 -0.192 L -39.261 -0.332 L -39.36 -0.452 L -39.485 -0.543 L -39.63 -0.601 L -39.784 -0.62 L -39.938 -0.601 L -40.083 -0.543 L -40.208 -0.452 L -40.307 -0.332 L -40.374 -0.192 L -40.403 -0.039 L -40.393 0.116 L -40.345 0.264 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M 37.883 1.533 L 38.147 1.368 L 38.295 0.984 L 38.172 0.77 L 38.031 0.337 L 38.003 -0.113 L 38.089 -0.562 L 38.169 -0.765 L 38.423 -1.206 L 37.45 -1.756 L 36.421 -2.172 L 34.481 -2.728 L 31.248 -3.322 L 27.458 -3.719 L 23.345 -3.893 L 17.139 -3.719 L 12.479 -3.191 L 9.419 -2.552 L 8.173 -2.172 L 7.146 -1.756 L 6.177 -1.209 L 6.473 -0.657 L 6.539 -0.453 L 6.596 0.0 L 6.54 0.447 L 6.372 0.873 L 6.271 1.034 L 6.445 1.366 L 6.721 1.538 L 7.631 1.967 L 8.769 2.366 L 10.116 2.728 L 12.48 3.191 L 17.137 3.719 L 21.249 3.893 L 25.427 3.834 L 29.406 3.547 L 31.249 3.322 L 34.479 2.728 L 35.827 2.366 L 36.965 1.967 L 37.875 1.538 L 37.883 1.533 L 37.883 1.533 L 37.883 1.533 L 37.883 1.533 M 39.059 0.345 L 39.105 0.44 L 39.236 0.599 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 39.016 0.255 L 39.059 0.345 L 39.059 0.345 L 39.059 0.345 L 39.059 0.345 M 5.572 0.255 L 5.605 0.154 L 5.618 -0.051 L 5.58 -0.255 L 5.491 -0.44 L 5.36 -0.599 L 5.194 -0.719 L 5.002 -0.796 L 4.798 -0.822 L 4.594 -0.796 L 4.402 -0.719 L 4.236 -0.599 L 4.105 -0.44 L 4.016 -0.255 L 3.978 -0.051 L 3.991 0.154 L 4.055 0.35 L 4.165 0.523 L 4.316 0.665 L 4.496 0.763 L 4.694 0.815 L 4.902 0.815 L 5.1 0.763 L 5.28 0.665 L 5.431 0.523 L 5.541 0.35 L 5.572 0.255 L 5.572 0.255 L 5.572 0.255 L 5.572 0.255 M -6.699 1.533 L -6.435 1.368 L -6.287 0.984 L -6.41 0.77 L -6.551 0.337 L -6.579 -0.113 L -6.493 -0.562 L -6.413 -0.765 L -6.159 -1.206 L -7.132 -1.756 L -8.161 -2.172 L -10.101 -2.728 L -13.334 -3.322 L -17.124 -3.719 L -21.237 -3.893 L -27.443 -3.719 L -32.103 -3.191 L -35.163 -2.552 L -36.409 -2.172 L -37.436 -1.756 L -38.405 -1.209 L -38.109 -0.657 L -38.043 -0.453 L -37.986 0.0 L -38.042 0.447 L -38.21 0.873 L -38.311 1.034 L -38.137 1.366 L -37.861 1.538 L -36.951 1.967 L -35.813 2.366 L -34.466 2.728 L -32.102 3.191 L -27.445 3.719 L -23.333 3.893 L -19.155 3.834 L -15.176 3.547 L -13.333 3.322 L -10.103 2.728 L -8.755 2.366 L -7.617 1.967 L -6.707 1.538 L -6.699 1.533 L -6.699 1.533 L -6.699 1.533 L -6.699 1.533 M -5.523 0.345 L -5.477 0.44 L -5.346 0.599 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.566 0.255 L -5.523 0.345 L -5.523 0.345 L -5.523 0.345 L -5.523 0.345 M -39.01 0.255 L -38.977 0.154 L -38.964 -0.051 L -39.002 -0.255 L -39.091 -0.44 L -39.222 -0.599 L -39.388 -0.719 L -39.58 -0.796 L -39.784 -0.822 L -39.988 -0.796 L -40.18 -0.719 L -40.346 -0.599 L -40.477 -0.44 L -40.566 -0.255 L -40.604 -0.051 L -40.591 0.154 L -40.527 0.35 L -40.417 0.523 L -40.266 0.665 L -40.086 0.763 L -39.888 0.815 L -39.68 0.815 L -39.482 0.763 L -39.302 0.665 L -39.151 0.523 L -39.041 0.35 L -39.01 0.255 L -39.01 0.255 L -39.01 0.255 L -39.01 0.255' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -44.451 0.0 L -44.031 1.843 L -43.131 3.196 L -42.167 3.946 L -41.092 4.449 L -36.668 5.103 L -26.944 6.468 L 17.838 6.474 L 30.302 6.2 L 40.106 4.611 L 41.266 4.366 L 42.502 3.745 L 43.466 2.812 L 44.09 1.724 L 44.433 0.0 L 44.09 -1.724 L 43.466 -2.812 L 42.502 -3.745 L 41.266 -4.366 L 40.106 -4.611 L 30.302 -6.2 L 17.838 -6.474 L -26.944 -6.468 L -36.668 -5.103 L -41.092 -4.449 L -42.167 -3.946 L -43.131 -3.196 L -44.031 -1.843 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 L -44.451 0.0 M 6.313 1.613 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 M 38.31 -1.591 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 M 5.525 -1.328 L 5.211 -1.015 L 5.559 -0.797 L 5.865 -1.103 L 6.096 -0.768 L 5.79 -0.463 L 5.896 -0.003 L 6.267 -0.374 L 6.293 0.166 L 4.962 1.497 L 4.798 1.095 L 4.432 1.461 L 4.027 1.3 L 4.334 0.994 L 4.005 0.757 L 3.71 1.052 L 3.468 0.728 L 3.781 0.415 L 3.321 0.309 L 3.696 -0.066 L 3.313 -0.249 L 4.548 -1.484 L 4.725 -1.095 L 5.111 -1.48 L 5.111 -1.48 L 5.111 -1.48 L 5.111 -1.48 M 38.297 -0.16 L 39.638 -1.501 L 39.798 -1.095 L 40.166 -1.463 L 40.564 -1.296 L 40.262 -0.994 L 40.591 -0.757 L 40.88 -1.046 L 41.119 -0.719 L 40.815 -0.415 L 41.272 -0.307 L 40.9 0.066 L 41.289 0.243 L 40.039 1.492 L 39.871 1.095 L 39.493 1.473 L 39.082 1.318 L 39.385 1.015 L 39.037 0.797 L 38.71 1.124 L 38.496 0.772 L 38.806 0.463 L 38.7 0.003 L 38.335 0.368 L 38.335 0.368 L 38.335 0.368 L 38.335 0.368 M -38.269 1.613 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 M -6.272 -1.591 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 M -39.057 -1.328 L -39.371 -1.015 L -39.023 -0.797 L -38.717 -1.103 L -38.486 -0.768 L -38.792 -0.463 L -38.686 -0.003 L -38.315 -0.374 L -38.289 0.166 L -39.62 1.497 L -39.784 1.095 L -40.15 1.461 L -40.555 1.3 L -40.248 0.994 L -40.577 0.757 L -40.872 1.052 L -41.114 0.728 L -40.801 0.415 L -41.261 0.309 L -40.886 -0.066 L -41.269 -0.249 L -40.034 -1.484 L -39.857 -1.095 L -39.471 -1.48 L -39.471 -1.48 L -39.471 -1.48 L -39.471 -1.48 M -6.285 -0.16 L -4.944 -1.501 L -4.784 -1.095 L -4.416 -1.463 L -4.018 -1.296 L -4.32 -0.994 L -3.991 -0.757 L -3.702 -1.046 L -3.463 -0.719 L -3.767 -0.415 L -3.31 -0.307 L -3.682 0.066 L -3.293 0.243 L -4.543 1.492 L -4.711 1.095 L -5.089 1.473 L -5.5 1.318 L -5.197 1.015 L -5.545 0.797 L -5.872 1.124 L -6.086 0.772 L -5.776 0.463 L -5.882 0.003 L -6.247 0.368 L -6.247 0.368 L -6.247 0.368 L -6.247 0.368' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+		<g id='z:0.8' inkscape:groupmode='layer' inkscape:label='Layer 2, z:0.8' transform='translate(280.0, 308.723)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.8' fill='#000' stroke='none' y='15' >Layer 2, z:0.8</text>
+			<path d='M -41.537 -0.964 L -41.242 -1.369 L -40.856 -1.689 L -40.402 -1.902 L -39.91 -1.996 L -39.409 -1.965 L -38.932 -1.81 L -38.664 -1.656 L -38.058 -1.927 L -36.153 -2.55 L -33.758 -3.082 L -31.929 -3.377 L -26.76 -3.874 L -20.028 -3.968 L -14.62 -3.619 L -10.81 -3.082 L -8.415 -2.55 L -7.086 -2.143 L -5.904 -1.656 L -5.636 -1.81 L -5.402 -1.902 L -4.91 -1.996 L -4.409 -1.965 L -3.932 -1.81 L -3.509 -1.541 L -3.166 -1.176 L -2.924 -0.736 L -2.8 -0.251 L -2.8 0.251 L -2.924 0.736 L -3.166 1.176 L -3.509 1.541 L -3.932 1.81 L -4.409 1.965 L -4.91 1.996 L -5.402 1.902 L -5.636 1.81 L -5.904 1.656 L -7.086 2.143 L -8.415 2.55 L -10.81 3.082 L -14.62 3.619 L -20.028 3.968 L -26.76 3.874 L -31.929 3.377 L -33.758 3.082 L -36.153 2.55 L -38.058 1.927 L -38.664 1.656 L -38.932 1.81 L -39.409 1.965 L -39.91 1.996 L -40.402 1.902 L -40.856 1.689 L -41.242 1.369 L -41.537 0.964 L -41.721 0.497 L -41.784 0.0 L -41.721 -0.497 z M -37.784 0.0 L -37.847 0.497 L -38.081 1.043 L -37.985 1.225 L -36.875 1.782 L -35.754 2.175 L -34.421 2.533 L -32.071 2.993 L -27.429 3.519 L -23.33 3.693 L -19.164 3.634 L -15.195 3.348 L -13.363 3.124 L -10.147 2.533 L -8.814 2.175 L -7.693 1.782 L -6.598 1.234 L -6.508 1.001 L -6.594 0.852 L -6.749 0.375 L -6.78 -0.126 L -6.686 -0.618 L -6.594 -0.852 L -6.433 -1.131 L -7.219 -1.575 L -8.226 -1.983 L -10.147 -2.533 L -13.363 -3.124 L -17.139 -3.519 L -21.238 -3.693 L -27.429 -3.519 L -32.071 -2.993 L -35.113 -2.358 L -36.342 -1.983 L -37.349 -1.575 L -38.136 -1.131 L -37.924 -0.736 L -37.847 -0.497 z M -5.208 0.452 L -5.083 0.543 L -4.938 0.601 L -4.784 0.62 L -4.63 0.601 L -4.485 0.543 L -4.36 0.452 L -4.261 0.332 L -4.194 0.192 L -4.165 0.039 L -4.175 -0.116 L -4.223 -0.264 L -4.306 -0.395 L -4.42 -0.502 L -4.556 -0.576 L -4.706 -0.615 L -4.862 -0.615 L -5.012 -0.576 L -5.148 -0.502 L -5.262 -0.395 L -5.345 -0.264 L -5.393 -0.116 L -5.403 0.039 L -5.374 0.192 L -5.307 0.332 z M -40.262 0.395 L -40.148 0.502 L -40.012 0.576 L -39.862 0.615 L -39.706 0.615 L -39.556 0.576 L -39.42 0.502 L -39.306 0.395 L -39.223 0.264 L -39.175 0.116 L -39.165 -0.039 L -39.194 -0.192 L -39.261 -0.332 L -39.36 -0.452 L -39.485 -0.543 L -39.63 -0.601 L -39.784 -0.62 L -39.938 -0.601 L -40.083 -0.543 L -40.208 -0.452 L -40.307 -0.332 L -40.374 -0.192 L -40.403 -0.039 L -40.393 0.116 L -40.345 0.264 z M 3.045 -0.964 L 3.34 -1.369 L 3.726 -1.689 L 4.18 -1.902 L 4.672 -1.996 L 5.173 -1.965 L 5.65 -1.81 L 5.918 -1.656 L 6.524 -1.927 L 8.429 -2.55 L 10.824 -3.082 L 12.653 -3.377 L 17.822 -3.874 L 24.554 -3.968 L 29.962 -3.619 L 33.772 -3.082 L 36.167 -2.55 L 37.496 -2.143 L 38.678 -1.656 L 38.946 -1.81 L 39.18 -1.902 L 39.672 -1.996 L 40.173 -1.965 L 40.65 -1.81 L 41.073 -1.541 L 41.416 -1.176 L 41.658 -0.736 L 41.782 -0.251 L 41.782 0.251 L 41.658 0.736 L 41.416 1.176 L 41.073 1.541 L 40.65 1.81 L 40.173 1.965 L 39.672 1.996 L 39.18 1.902 L 38.946 1.81 L 38.678 1.656 L 37.496 2.143 L 36.167 2.55 L 33.772 3.082 L 29.962 3.619 L 24.554 3.968 L 17.822 3.874 L 12.653 3.377 L 10.824 3.082 L 8.429 2.55 L 6.524 1.927 L 5.918 1.656 L 5.65 1.81 L 5.173 1.965 L 4.672 1.996 L 4.18 1.902 L 3.726 1.689 L 3.34 1.369 L 3.045 0.964 L 2.861 0.497 L 2.798 0.0 L 2.861 -0.497 z M 6.798 0.0 L 6.735 0.497 L 6.501 1.043 L 6.597 1.225 L 7.707 1.782 L 8.828 2.175 L 10.161 2.533 L 12.511 2.993 L 17.153 3.519 L 21.252 3.693 L 25.418 3.634 L 29.387 3.348 L 31.219 3.124 L 34.435 2.533 L 35.768 2.175 L 36.889 1.782 L 37.984 1.234 L 38.074 1.001 L 37.988 0.852 L 37.833 0.375 L 37.802 -0.126 L 37.896 -0.618 L 37.988 -0.852 L 38.149 -1.131 L 37.363 -1.575 L 36.356 -1.983 L 34.435 -2.533 L 31.219 -3.124 L 27.443 -3.519 L 23.344 -3.693 L 17.153 -3.519 L 12.511 -2.993 L 9.469 -2.358 L 8.24 -1.983 L 7.233 -1.575 L 6.446 -1.131 L 6.658 -0.736 L 6.735 -0.497 z M 39.374 0.452 L 39.499 0.543 L 39.644 0.601 L 39.798 0.62 L 39.952 0.601 L 40.097 0.543 L 40.222 0.452 L 40.321 0.332 L 40.388 0.192 L 40.417 0.039 L 40.407 -0.116 L 40.359 -0.264 L 40.276 -0.395 L 40.162 -0.502 L 40.026 -0.576 L 39.876 -0.615 L 39.72 -0.615 L 39.57 -0.576 L 39.434 -0.502 L 39.32 -0.395 L 39.237 -0.264 L 39.189 -0.116 L 39.179 0.039 L 39.208 0.192 L 39.275 0.332 z M 4.32 0.395 L 4.434 0.502 L 4.57 0.576 L 4.72 0.615 L 4.876 0.615 L 5.026 0.576 L 5.162 0.502 L 5.276 0.395 L 5.359 0.264 L 5.407 0.116 L 5.417 -0.039 L 5.388 -0.192 L 5.321 -0.332 L 5.222 -0.452 L 5.097 -0.543 L 4.952 -0.601 L 4.798 -0.62 L 4.644 -0.601 L 4.499 -0.543 L 4.374 -0.452 L 4.275 -0.332 L 4.208 -0.192 L 4.179 -0.039 L 4.189 0.116 L 4.237 0.264 z' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -6.369 1.197 L -6.287 0.984 L -6.41 0.77 L -6.551 0.337 L -6.579 -0.113 L -6.493 -0.562 L -6.413 -0.765 L -6.159 -1.206 L -7.132 -1.756 L -8.161 -2.172 L -10.101 -2.728 L -13.334 -3.322 L -17.124 -3.719 L -21.237 -3.893 L -27.443 -3.719 L -32.103 -3.191 L -35.163 -2.552 L -36.409 -2.172 L -37.436 -1.756 L -38.405 -1.209 L -38.109 -0.657 L -38.043 -0.453 L -37.986 0.0 L -38.042 0.447 L -38.21 0.873 L -38.311 1.034 L -38.137 1.366 L -37.861 1.538 L -36.951 1.967 L -35.813 2.366 L -34.466 2.728 L -32.102 3.191 L -27.445 3.719 L -23.333 3.893 L -19.155 3.834 L -15.176 3.547 L -13.333 3.322 L -10.103 2.728 L -8.755 2.366 L -7.617 1.967 L -6.707 1.538 L -6.435 1.368 L -6.369 1.197 L -6.369 1.197 L -6.369 1.197 L -6.369 1.197 M -5.197 0.706 L -5.18 0.719 L -4.988 0.796 L -4.784 0.822 L -4.58 0.796 L -4.388 0.719 L -4.222 0.599 L -4.091 0.44 L -4.002 0.255 L -3.964 0.051 L -3.977 -0.154 L -4.041 -0.35 L -4.151 -0.523 L -4.302 -0.665 L -4.482 -0.763 L -4.68 -0.815 L -4.888 -0.815 L -5.086 -0.763 L -5.266 -0.665 L -5.417 -0.523 L -5.527 -0.35 L -5.591 -0.154 L -5.604 0.051 L -5.566 0.255 L -5.477 0.44 L -5.346 0.599 L -5.197 0.706 L -5.197 0.706 L -5.197 0.706 L -5.197 0.706 M -38.998 -0.231 L -39.002 -0.255 L -39.091 -0.44 L -39.222 -0.599 L -39.388 -0.719 L -39.58 -0.796 L -39.784 -0.822 L -39.988 -0.796 L -40.18 -0.719 L -40.346 -0.599 L -40.477 -0.44 L -40.566 -0.255 L -40.604 -0.051 L -40.591 0.154 L -40.527 0.35 L -40.417 0.523 L -40.266 0.665 L -40.086 0.763 L -39.888 0.815 L -39.68 0.815 L -39.482 0.763 L -39.302 0.665 L -39.151 0.523 L -39.041 0.35 L -38.977 0.154 L -38.964 -0.051 L -38.998 -0.231 L -38.998 -0.231 L -38.998 -0.231 L -38.998 -0.231 M 38.213 1.197 L 38.295 0.984 L 38.172 0.77 L 38.031 0.337 L 38.003 -0.113 L 38.089 -0.562 L 38.169 -0.765 L 38.423 -1.206 L 37.45 -1.756 L 36.421 -2.172 L 34.481 -2.728 L 31.248 -3.322 L 27.458 -3.719 L 23.345 -3.893 L 17.139 -3.719 L 12.479 -3.191 L 9.419 -2.552 L 8.173 -2.172 L 7.146 -1.756 L 6.177 -1.209 L 6.473 -0.657 L 6.539 -0.453 L 6.596 0.0 L 6.54 0.447 L 6.372 0.873 L 6.271 1.034 L 6.445 1.366 L 6.721 1.538 L 7.631 1.967 L 8.769 2.366 L 10.116 2.728 L 12.48 3.191 L 17.137 3.719 L 21.249 3.893 L 25.427 3.834 L 29.406 3.547 L 31.249 3.322 L 34.479 2.728 L 35.827 2.366 L 36.965 1.967 L 37.875 1.538 L 38.147 1.368 L 38.213 1.197 L 38.213 1.197 L 38.213 1.197 L 38.213 1.197 M 39.385 0.706 L 39.402 0.719 L 39.594 0.796 L 39.798 0.822 L 40.002 0.796 L 40.194 0.719 L 40.36 0.599 L 40.491 0.44 L 40.58 0.255 L 40.618 0.051 L 40.605 -0.154 L 40.541 -0.35 L 40.431 -0.523 L 40.28 -0.665 L 40.1 -0.763 L 39.902 -0.815 L 39.694 -0.815 L 39.496 -0.763 L 39.316 -0.665 L 39.165 -0.523 L 39.055 -0.35 L 38.991 -0.154 L 38.978 0.051 L 39.016 0.255 L 39.105 0.44 L 39.236 0.599 L 39.385 0.706 L 39.385 0.706 L 39.385 0.706 L 39.385 0.706 M 5.584 -0.231 L 5.58 -0.255 L 5.491 -0.44 L 5.36 -0.599 L 5.194 -0.719 L 5.002 -0.796 L 4.798 -0.822 L 4.594 -0.796 L 4.402 -0.719 L 4.236 -0.599 L 4.105 -0.44 L 4.016 -0.255 L 3.978 -0.051 L 3.991 0.154 L 4.055 0.35 L 4.165 0.523 L 4.316 0.665 L 4.496 0.763 L 4.694 0.815 L 4.902 0.815 L 5.1 0.763 L 5.28 0.665 L 5.431 0.523 L 5.541 0.35 L 5.605 0.154 L 5.618 -0.051 L 5.584 -0.231 L 5.584 -0.231 L 5.584 -0.231 L 5.584 -0.231' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+			<path d='M -38.269 1.613 L -38.675 1.432 L -39.014 1.626 L -39.447 1.767 L -39.897 1.795 L -40.34 1.71 L -40.748 1.519 L -41.095 1.231 L -41.36 0.867 L -41.526 0.447 L -41.582 0.0 L -41.526 -0.447 L -41.36 -0.867 L -41.095 -1.231 L -40.748 -1.519 L -40.34 -1.71 L -39.897 -1.795 L -39.447 -1.767 L -39.014 -1.626 L -38.675 -1.432 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 L -38.214 -1.638 M -6.272 -1.591 L -5.889 -1.434 L -5.549 -1.629 L -5.346 -1.709 L -4.897 -1.795 L -4.447 -1.767 L -4.018 -1.628 L -3.638 -1.386 L -3.329 -1.057 L -3.111 -0.662 L -3.0 -0.226 L -3.0 0.226 L -3.111 0.662 L -3.329 1.057 L -3.638 1.386 L -4.018 1.628 L -4.447 1.767 L -4.897 1.795 L -5.346 1.709 L -5.549 1.629 L -5.889 1.434 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 L -6.248 1.582 M -41.114 -0.728 L -40.8 -0.414 L -40.578 -0.758 L -40.872 -1.052 L -40.555 -1.3 L -40.248 -0.994 L -39.792 -1.103 L -40.15 -1.461 L -39.62 -1.497 L -38.289 -0.166 L -38.687 0.002 L -38.316 0.373 L -38.486 0.769 L -38.785 0.47 L -39.028 0.792 L -38.731 1.089 L -39.057 1.328 L -39.367 1.019 L -39.471 1.48 L -39.857 1.095 L -40.034 1.484 L -41.269 0.249 L -40.877 0.075 L -41.261 -0.309 L -41.261 -0.309 L -41.261 -0.309 L -41.261 -0.309 M -6.281 0.164 L -4.944 1.501 L -4.776 1.103 L -4.416 1.463 L -4.018 1.296 L -4.32 0.994 L -3.99 0.758 L -3.702 1.046 L -3.463 0.719 L -3.768 0.414 L -3.31 0.307 L -3.691 -0.075 L -3.293 -0.243 L -4.543 -1.492 L -4.711 -1.095 L -5.089 -1.473 L -5.501 -1.319 L -5.201 -1.019 L -5.54 -0.792 L -5.849 -1.101 L -6.077 -0.763 L -5.783 -0.47 L -6.245 -0.366 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 L -5.881 -0.002 M -5.998 1.013 L -5.902 1.108 L -5.902 1.108 L -5.902 1.108 L -5.902 1.108 M 6.313 1.613 L 5.907 1.432 L 5.568 1.626 L 5.135 1.767 L 4.685 1.795 L 4.242 1.71 L 3.834 1.519 L 3.487 1.231 L 3.222 0.867 L 3.056 0.447 L 3.0 0.0 L 3.056 -0.447 L 3.222 -0.867 L 3.487 -1.231 L 3.834 -1.519 L 4.242 -1.71 L 4.685 -1.795 L 5.135 -1.767 L 5.568 -1.626 L 5.907 -1.432 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 L 6.368 -1.638 M 38.31 -1.591 L 38.693 -1.434 L 39.033 -1.629 L 39.236 -1.709 L 39.685 -1.795 L 40.135 -1.767 L 40.564 -1.628 L 40.944 -1.386 L 41.253 -1.057 L 41.471 -0.662 L 41.582 -0.226 L 41.582 0.226 L 41.471 0.662 L 41.253 1.057 L 40.944 1.386 L 40.564 1.628 L 40.135 1.767 L 39.685 1.795 L 39.236 1.709 L 39.033 1.629 L 38.693 1.434 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 L 38.334 1.582 M 3.468 -0.728 L 3.782 -0.414 L 4.004 -0.758 L 3.71 -1.052 L 4.027 -1.3 L 4.334 -0.994 L 4.79 -1.103 L 4.432 -1.461 L 4.962 -1.497 L 6.293 -0.166 L 5.895 0.002 L 6.266 0.373 L 6.096 0.769 L 5.797 0.47 L 5.554 0.792 L 5.851 1.089 L 5.525 1.328 L 5.215 1.019 L 5.111 1.48 L 4.725 1.095 L 4.548 1.484 L 3.313 0.249 L 3.705 0.075 L 3.321 -0.309 L 3.321 -0.309 L 3.321 -0.309 L 3.321 -0.309 M 38.301 0.164 L 39.638 1.501 L 39.806 1.103 L 40.166 1.463 L 40.564 1.296 L 40.262 0.994 L 40.592 0.758 L 40.88 1.046 L 41.119 0.719 L 40.814 0.414 L 41.272 0.307 L 40.891 -0.075 L 41.289 -0.243 L 40.039 -1.492 L 39.871 -1.095 L 39.493 -1.473 L 39.081 -1.319 L 39.381 -1.019 L 39.042 -0.792 L 38.733 -1.101 L 38.505 -0.763 L 38.799 -0.47 L 38.337 -0.366 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 L 38.701 -0.002 M 38.584 1.013 L 38.68 1.108 L 38.68 1.108 L 38.68 1.108 L 38.68 1.108' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(44.451, 6.474)' />
+		</g>
+	</g>
+<!--End Layer Data-->
+<!--beginningOfControlSection='true' must be there or else the control boxes will be carved-->
+	<g id='controls' beginningOfControlSection='true' inkscape:groupmode='layer' inkscape:label='Controls'>
+<!--id='isoControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='isoControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<circle id='globe' cx='120' cy='120' fill='gray' r='100' />
+			<circle id='cover' cx='120' cy='120' fill='silver' r='33' />
+			<circle id='observer' fill='darkslateblue' r='12' />
+			<text id='latitudeIso' x='20' y='260' >Latitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude-1.0)' x='198' y='260' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude+1.0)' x='213' y='260' >&gt;</text>
+			<text id='longitudeIso' x='20' y='280' >Longitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude-1.0)' x='198' y='280' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude+1.0)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleIso' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXIso' y='20' >X: -44.451 mm</text>
+				<text id='minYIso' y='40' >Y: -6.474 mm</text>
+				<text id='minZIso' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXIso' y='20' >X: 44.433 mm</text>
+				<text id='maxYIso' y='40' >Y: 6.474 mm</text>
+				<text id='maxZIso' y='60' >Z: 0.9 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXIso' y='20' >X: 88.884 mm</text>
+				<text id='dimYIso' y='40' >Y: 12.948 mm</text>
+				<text id='dimZIso' y='60' >Z: 0.6 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightIso' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersIso' y='40' >Number of Layers: 3</text>
+				<text id='volumeIso' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='layerControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='layerControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+<!--<path stroke='#000' stroke-width='3' d='M 20 20 h5 l-5 -10 l-5 10 h5 v35 h35 v-5 l10 5 l-10 5 v-5 h-35 z'/>-->
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text id='minIndexLayer' x='20' y='245' >0</text>
+			<rect id='slider' fill='gray' height='24' width='170' x='32' y='230' />
+			<circle id='thumb' cx='42' cy='242' fill='darkslateblue' r='12' />
+			<text id='maxIndexLayer' x='203' y='245' >1</text>
+			<text id='currentIndexLayer' x='20' y='280' >Layer</text>
+			<text id='decreaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex-1)' x='198' y='280' >&lt;</text>
+			<text id='increaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex+1)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleLayer' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXLayer' y='20' >X: -44.451 mm</text>
+				<text id='minYLayer' y='40' >Y: -6.474 mm</text>
+				<text id='minZLayer' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXLayer' y='20' >X: 44.433 mm</text>
+				<text id='maxYLayer' y='40' >Y: 6.474 mm</text>
+				<text id='maxZLayer' y='60' >Z: 0.9 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXLayer' y='20' >X: 88.884 mm</text>
+				<text id='dimYLayer' y='40' >Y: 12.948 mm</text>
+				<text id='dimZLayer' y='60' >Z: 0.6 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightLayer' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersLayer' y='40' >Number of Layers: 3</text>
+				<text id='volumeLayer' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='scrollControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='scrollControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='visible'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleScroll' x='65' y='300' >: 1</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXScroll' y='20' >X: -44.451 mm</text>
+				<text id='minYScroll' y='40' >Y: -6.474 mm</text>
+				<text id='minZScroll' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXScroll' y='20' >X: 44.433 mm</text>
+				<text id='maxYScroll' y='40' >Y: 6.474 mm</text>
+				<text id='maxZScroll' y='60' >Z: 0.9 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXScroll' y='20' >X: 88.884 mm</text>
+				<text id='dimYScroll' y='40' >Y: 12.948 mm</text>
+				<text id='dimZScroll' y='60' >Z: 0.6 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightScroll' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersScroll' y='40' >Number of Layers: 3</text>
+				<text id='volumeScroll' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+		<text id='isoViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewIso()' text-anchor='middle' visibility='visible' x='80' y='30' >[Iso View]</text>
+		<text id='isoViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='76' y='30' >Iso View</text>
+		<text id='layerViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewLayer()' text-anchor='middle' visibility='visible' x='240' y='30' >[Layer View]</text>
+		<text id='layerViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='236' y='30' >Layer View</text>
+		<text id='scrollViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewScroll()' text-anchor='middle' visibility='hidden' x='400' y='30' >[Scroll View]</text>
+		<text id='scrollViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='visible' x='396' y='30' >Scroll View</text>
+	</g>
+</svg>

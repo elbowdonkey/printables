@@ -1,0 +1,646 @@
+<?xml version='1.0' standalone='no'?>
+<!--Written in KDevelop (http://www.kdevelop.org/)-->
+<svg baseProfile='full' contentScriptType='text/ecmascript' contentStyleType='text/css' height='1839.222px' onload='init()' preserveAspectRatio='xMidYMid meet' version='1.0' width='516.0px' xmlns='http://www.w3.org/2000/svg' xmlns:inkscape='http://www.inkscape.org/namespaces/inkscape' xmlns:slice='http://www.reprap.org/slice' xmlns:xlink='http://www.w3.org/1999/xlink' zoomAndPan='magnify'>
+	<metadata>
+		<slice:layers id='sliceData' controlBoxHeight='720' controlBoxWidth='240' decimalPlacesCarried='3' edgeWidth='0.4' layerHeight='0.2' margin='20' marginTop='60' maxX='15.861' maxY='6.132' maxZ='4.3' minX='-15.871' minY='-6.121' minZ='0.3' procedureName='vectorwrite' svgMinWidth='516' template='svg_layer' textHeight='22.5' unitScale='3.7' version='0.1' yAxisPointingUpward='true' />
+	</metadata>
+	<script type='text/ecmascript'>
+<![CDATA[
+globalMetadata = document.getElementsByTagNameNS('http://www.reprap.org/slice', 'layers')[0];
+globalSliceMinX = globalMetadata.getAttribute('minX') * 1;
+globalSliceMaxX = globalMetadata.getAttribute('maxX') * 1;
+globalSliceMinY = globalMetadata.getAttribute('minY') * 1;
+globalSliceMaxY = globalMetadata.getAttribute('maxY') * 1;
+globalSliceMinZ = globalMetadata.getAttribute('minZ') * 1;
+globalSliceMaxZ = globalMetadata.getAttribute('maxZ') * 1;
+
+//Control var's
+globalLayerIndex = 0; //Number of currently viewed layer (zero index)
+globalLatitude = 60.0;
+globalLongitude = 45.0;
+globalControlBoxHeight = globalMetadata.getAttribute('controlBoxHeight') * 1;
+globalControlBoxWidth = globalMetadata.getAttribute('controlBoxWidth') * 1;
+globalSliding = false;
+globalObserving = false
+
+//Display var's
+globalMargin = globalMetadata.getAttribute('margin') * 1;
+globalMarginTop = globalMetadata.getAttribute('marginTop') * 1;
+globalDimensionX = globalSliceMaxX - globalSliceMinX;
+globalDimensionY = globalSliceMaxY - globalSliceMinY;
+globalDimensionZ = globalSliceMaxZ - globalSliceMinZ;
+magnitudeXYSquared = globalDimensionX * globalDimensionX + globalDimensionY * globalDimensionY;
+globalDimensionMagnitude = Math.sqrt(magnitudeXYSquared + globalDimensionZ * globalDimensionZ);
+globalGlobeTravelRadian = 0.0;
+globalGlobeInnerObserverRadius = 0.0;
+globalTextHeight = globalMetadata.getAttribute('textHeight') * 1.0;
+globalUnitScale = globalMetadata.getAttribute('unitScale') * 1.0;
+globalXOffset = globalControlBoxWidth + globalMargin + globalMargin;
+globalYOffset = globalMargin + globalMarginTop;
+globalZoomScale = 1.0; //Default 1:1 may need smaller scale for large objects
+globalScale = globalUnitScale * globalZoomScale;
+
+//Globals to be set in init
+globalLayers = [];
+globalSlider = 0;
+globalThumb = 0;
+globalThumbRadius = 0.0;
+globalSliderWidthMinusDiameter = 0.0;
+
+
+function changeScale(newScale) {
+	globalZoomScale = newScale;
+	globalScale = globalUnitScale * globalZoomScale;
+	if (globalZoomScale >=1) { //dont scale line thickness for large display scale
+		document.getElementById('layerData').setAttributeNS(null, 'stroke-width', 2.0 / (globalScale));
+	}
+}
+
+function changeScaleIso(newScale) {
+	changeScale(newScale);
+	viewIso();
+}
+
+function changeScaleLayer(newScale) {
+	changeScale(newScale);
+	viewLayer();
+}
+
+function changeScaleScroll(newScale) {
+	changeScale(newScale);
+	viewScroll();
+}
+
+function displayIso(latitude, longitude) {
+	latitude = Math.max(0.0, latitude);
+	latitude = Math.min(89.0, latitude);
+	globalLatitude = Math.round(latitude);
+	globalLongitude = Math.round((longitude + 540.0) % 360.0) - 180.0;
+	latitudeRadians = getRadians(globalLatitude);
+	longitudeWiddershinsRadians = getRadians(90.0 - globalLongitude);
+	unitX = Math.cos(longitudeWiddershinsRadians);
+	unitY = Math.sin(longitudeWiddershinsRadians);
+	latitudeOverLayers = globalDimensionZ / globalLayers.length;
+	globalOneOverUnitScaleString = (1.0 / globalUnitScale).toString();
+	yScale = -1.0 * globalScale * Math.cos(latitudeRadians);
+	scaleRotateCenterString = ' scale(' + globalScale + ', ' + yScale + ')';
+	scaleRotateCenterString += ' rotate(' + (-1.0 * globalLongitude).toString() + ')';
+	centerX = (-0.5 * globalDimensionX - globalSliceMinX).toString();
+	centerY = (-0.5 * globalDimensionY - globalSliceMinY).toString();
+	scaleRotateCenterString += ' translate(' + centerX + ', ' + centerY + ')';
+	x = 0.5 * globalDimensionMagnitude * globalScale + globalXOffset;
+	halfLengthMinusOne = 0.5 * (globalLayers.length - 1);
+	for (var i in globalLayers) {
+		latitudeZSin = Math.sin(latitudeRadians) * (i - halfLengthMinusOne) * latitudeOverLayers
+		y = globalScale * (0.5 * globalDimensionMagnitude - latitudeZSin) + globalYOffset;
+//		y = globalDimensionY * globalScale + globalYOffset - i * unitY * latitudeOverLayers;
+		transformString = ' translate(' + x + ', ' + y + ')';
+		globalLayers[i].setAttributeNS(null, 'transform', transformString + scaleRotateCenterString);
+	}
+	setText('latitudeIso', 'Latitude: ' + globalLatitude.toString() + '°');
+	setText('longitudeIso', 'Longitude: ' + globalLongitude.toString() + '°');
+	globeMoveableRadius = globalGlobeTravelRadian * latitudeRadians + globalGlobeInnerObserverRadius;
+	globalObserver.setAttribute('cx', globalGlobeCenterX + unitX * globeMoveableRadius);
+	globalObserver.setAttribute('cy', globalGlobeCenterY - unitY * globeMoveableRadius);
+}
+
+function displayIsoByLatitude(latitude) {
+	displayIso(latitude, globalLongitude);
+}
+
+function displayIsoByLongitude(longitude) {
+	displayIso(globalLatitude, longitude);
+}
+
+function displayLayer(layerNum) {
+	if (globalLayers.length <= 1) {
+		document.getElementById('maxIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		document.getElementById('minIndexLayer').setAttributeNS(null, 'visibility', 'hidden');
+		globalSlider.setAttributeNS(null, 'visibility', 'hidden');
+		globalThumb.setAttributeNS(null, 'visibility', 'hidden');
+	}
+	if (layerNum <= 0) {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('decreaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum >= globalLayers.length - 1) {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'hidden');
+	}
+	else {
+		document.getElementById('increaseLayerIndex').setAttributeNS(null, 'visibility', 'visible');
+	}
+	if (layerNum < 0 || layerNum >= globalLayers.length) {
+		return
+	}
+	globalLayers[globalLayerIndex].setAttributeNS(null, 'visibility', 'hidden');
+	currentLayerElement = globalLayers[layerNum]
+	currentLayerElement.setAttributeNS(null, 'visibility', 'visible');
+	globalLayerIndex = layerNum;
+	setText('currentIndexLayer', 'Layer: ' + globalLayerIndex.toString() + ', ' + currentLayerElement.getAttribute('id'));
+	//Slider
+	if (!globalSliding) {
+		placeThumb(globalSliderWidthMinusDiameter / (globalLayers.length - 1) * globalLayerIndex + globalThumbRadius);
+	}
+}
+
+function getDegrees(radians) {
+	return radians / Math.PI * 180.0;
+}
+
+function getRadians(degrees) {
+	return degrees / 180.0 * Math.PI;
+}
+
+function getScaleTransformString(scale) {
+	scaleTransformString = 'scale(' + scale + ' ' + (scale * - 1)
+	return scaleTransformString + ') translate(' + (globalSliceMinX * - 1) + ' ' + (globalSliceMinY * - 1) + ')';
+}
+
+function getWidth() {
+	return (globalDimensionX * globalScale) + globalXOffset
+}
+
+function hideElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'hidden');
+	}
+}
+
+function init() {
+	//Find only layer groups
+	globe = document.getElementById('globe');
+	globalGlobeCenterX = globe.getAttribute('cx') * 1;
+	globalGlobeCenterXWindow = globalGlobeCenterX + globalMargin;
+	globalGlobeCenterY = globe.getAttribute('cy') * 1;
+	globalGlobeCenterYWindow = globalGlobeCenterX + globalMarginTop;
+	globalObserver = document.getElementById('observer');
+	globeRadius = globe.getAttribute('r') * 1.0;
+	observerRadius = globalObserver.getAttribute('r') * 1.0;
+	globalGlobeInnerObserverRadius = document.getElementById('cover').getAttribute('r') * 1.0 + observerRadius;
+	globalGlobeTravelRadian = getDegrees(globeRadius - globalGlobeInnerObserverRadius - observerRadius) / 89.0;
+	globalSlider = document.getElementById('slider');
+	globalSliderX = globalSlider.getAttribute('x') * 1;
+	globalSliderXWindow = globalSliderX + globalMargin
+	globalThumb = document.getElementById('thumb');
+	globalThumbRadius = globalThumb.getAttribute('r') * 1;
+	globalSliderWidthMinusRadius = globalSlider.getAttribute('width') * 1 - globalThumbRadius;
+	globalSliderWidthMinusDiameter = globalSliderWidthMinusRadius - globalThumbRadius;
+	var allGroups = document.getElementsByTagName('g');
+	for (var i = 0; i < allGroups.length; i++) {
+		if (allGroups[i].id.indexOf('z:') == 0) {
+			globalLayers.push(allGroups[i]);
+		}
+	}
+
+	//Slider
+	layerControlBox = document.getElementById('layerControlBox');
+	layerControlBox.addEventListener('mouseup', sliderUp, false);
+	layerControlBox.addEventListener('mousemove', sliderMove, false);
+	globalSlider.addEventListener('mousedown', sliderDownMove, false);
+	globalThumb.addEventListener('mousedown', sliderDownMove, false);
+	//Observer
+	isoControlBox = document.getElementById('isoControlBox');
+	isoControlBox.addEventListener('mouseup', observerUp, false);
+	isoControlBox.addEventListener('mousemove', observerMove, false);
+	globe.addEventListener('mousedown', observerDownMove, false);
+	globalObserver.addEventListener('mousedown', observerDownMove, false);
+	
+	//Control box data
+	setText('maxIndexLayer', globalLayers.length - 1);
+	changeScaleLayer(globalZoomScale);
+}
+
+function observerDown(event) {
+	globalObserving = true;
+}
+
+function observerDownMove(event) {
+	globalObserving = true;
+	observerMove(event);
+}
+
+function observerMove(event) {
+	if (!globalObserving) {
+		return;
+	}
+	observerX = event.clientX - globalGlobeCenterXWindow + window.pageXOffset;
+	observerY = event.clientY - globalGlobeCenterYWindow + window.pageYOffset;
+	distanceFromCenter = Math.sqrt(observerX * observerX + observerY * observerY);
+	latitudeRadians = (distanceFromCenter - globalGlobeInnerObserverRadius) / globalGlobeTravelRadian;
+	longitudeRadians = Math.atan2(observerX, -observerY);
+	displayIso(getDegrees(latitudeRadians), getDegrees(longitudeRadians));
+}
+
+function observerUp(event) {
+	globalObserving = false;
+}
+
+function placeThumb(value) {
+	if (globalLayers.length > 1) {
+		globalThumb.setAttribute('cx', globalSliderX + value);
+	}
+}
+
+function setScaleText(scaleID) {
+	setText(scaleID, ': ' + globalZoomScale);
+}
+
+function setSVG(width, height) {
+	rootSVG = document.getElementsByTagName('svg')[0];
+	svgMinWidth = globalMetadata.getAttribute('svgMinWidth') * 1;
+	height = Math.max(globalControlBoxHeight + globalMargin + globalMarginTop, height);
+	width = Math.max(svgMinWidth, width);
+	rootSVG.setAttributeNS(null, 'width', width + 'px')
+	rootSVG.setAttributeNS(null, 'height', height + 'px')
+}
+
+function setText(id, str) {
+	e = document.getElementById(id)
+	if (e != null)
+		e.firstChild.nodeValue = str;
+}
+
+function showElements(elementNames) {
+	for (var elementNameIndex in elementNames) {
+		document.getElementById(elementNames[elementNameIndex]).setAttributeNS(null, 'visibility', 'visible');
+	}
+}
+
+function sliderDown(event) {
+	globalSliding = true;
+}
+
+function sliderDownMove(event) {
+	globalSliding = true;
+	sliderMove(event);
+}
+
+function sliderMove(event) {
+	if (!globalSliding) {
+		return;
+	}
+	value = event.clientX - globalSliderXWindow + window.pageXOffset;
+	if (value >= globalThumbRadius && value <= globalSliderWidthMinusRadius) {
+		placeThumb(value);
+		zoneWidth = globalSliderWidthMinusDiameter / (globalLayers.length);
+		newLayer = Math.round((value - globalThumbRadius - 0.5 * zoneWidth) / zoneWidth)
+		if (newLayer != globalLayerIndex) {
+			displayLayer(newLayer)
+		}
+	}
+}
+
+function sliderUp(event) {
+	globalSliding = false;
+}
+
+function viewIso() {
+	height = (globalDimensionMagnitude * globalScale) + globalYOffset;
+	setSVG((globalDimensionMagnitude * globalScale) + globalXOffset, height);
+	for (var i in globalLayers) {
+//		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalMargin + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			  pathElements[pathElementIndex].setAttributeNS(null, 'transform', '');
+		  }
+	  }
+	  //show control box
+	hideElements(['decreaseLayerIndex', 'increaseLayerIndex', 'isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollControlBox', 'scrollViewLabel']);
+	showElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollViewButton']);
+	displayIso(globalLatitude, globalLongitude);
+	setScaleText('scaleIso');
+}
+
+function viewLayer() {
+	//Set svg size and view port
+	height = (globalDimensionY * globalScale) + globalYOffset;
+	setSVG(getWidth(), height);
+	//move and hide all layers 
+	for (var i in globalLayers) {
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + globalXOffset + ' ' + height + ')');
+		globalLayers[i].setAttributeNS(null, 'visibility', 'hidden');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'hidden');
+		transform = getScaleTransformString(globalScale);
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	showElements(['isoViewButton', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	
+	//show current layer
+	displayLayer(globalLayerIndex);
+	setScaleText('scaleLayer');
+}
+
+function viewScroll() {
+	//Set svg size and view port
+	yDimensionScale = globalDimensionY * globalScale
+	singleHeight = (globalMargin + yDimensionScale + globalTextHeight)
+	height = globalLayers.length * singleHeight + globalMargin + globalMargin + globalYOffset;
+	setSVG(getWidth(), height);
+
+	//move and show all layers 
+	for (var i in globalLayers) {
+		x = globalXOffset;
+		y = i * singleHeight + yDimensionScale + globalYOffset;
+		transform = getScaleTransformString(globalScale);
+		globalLayers[i].setAttributeNS(null, 'transform', 'translate(' + x + ', ' + y + ')');
+		pathElements = globalLayers[i].getElementsByTagName('path');
+		for (var pathElementIndex = 0; pathElementIndex < pathElements.length; pathElementIndex++) {
+			pathElements[pathElementIndex].setAttributeNS(null, 'transform', transform);
+		}
+		globalLayers[i].setAttributeNS(null, 'visibility', 'visible');
+		globalLayers[i].getElementsByTagName('text')[0].setAttributeNS(null, 'visibility', 'visible');
+	}
+
+	//show control box
+	hideElements(['isoControlBox', 'isoViewLabel', 'layerControlBox', 'layerViewLabel', 'scrollViewButton'])
+	showElements(['isoViewButton', 'layerViewButton', 'scrollControlBox', 'scrollViewLabel'])
+	setScaleText('scaleScroll');
+}
+	]]>
+	</script>
+	<title >boom_skid2.gcode - Slice Layers</title>
+<!--Begin Layer Data   -->
+	<g id='layerData' fill='#556B2F' fill-rule='evenodd' font-family='Arial' font-size='15px' font-weight='bold' inkscape:groupmode='layer' inkscape:label='Slice Layers' stroke='#00F' stroke-width='0.54px'>
+<!--id='sliceElementTemplate' must be there or else the slice template will not be found-->
+		<g id='z:0.4' inkscape:groupmode='layer' inkscape:label='Layer 0, z:0.4' transform='translate(280.0, 125.336)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.4' fill='#000' stroke='none' y='15' >Layer 0, z:0.4</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.148 -2.645 L -5.148 -0.668 L -11.5 -0.668 L -11.5 0.668 L -5.148 0.668 L -5.148 2.645 L -12.123 1.453 L -12.476 1.312 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M -1.143 0.668 L -0.969 0.903 L -0.714 1.116 L -0.414 1.258 L -0.088 1.322 L 0.243 1.302 L 0.559 1.201 L 0.839 1.025 L 1.163 0.668 L 3.812 0.668 L 3.812 2.872 L 0.094 3.497 L -0.094 3.497 L -3.812 2.872 L -3.812 0.668 z M 0.71 -1.119 L 0.409 -1.26 L 0.083 -1.322 L -0.248 -1.302 L -0.564 -1.199 L -0.843 -1.022 L -1.164 -0.668 L -3.812 -0.668 L -3.812 -2.872 L -0.188 -3.488 L 0.188 -3.488 L 3.812 -2.872 L 3.812 -0.668 L 1.143 -0.668 L 0.966 -0.907 z M 5.148 2.645 L 5.148 0.668 L 11.5 0.668 L 11.5 -0.668 L 5.148 -0.668 L 5.148 -2.645 L 12.122 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.629 1.215 L 12.389 1.357 L 12.12 1.454 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.581 -0.997 L -12.577 -1.001 L -12.3 -1.176 L -12.072 -1.259 L -5.348 -2.408 L -5.348 -0.868 L -11.7 -0.868 L -11.7 0.868 L -5.348 0.868 L -5.348 2.408 L -12.068 1.259 L -12.379 1.136 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.581 -0.997 L -12.581 -0.997 L -12.581 -0.997 L -12.581 -0.997 M -3.612 1.154 L -3.612 1.148 L -3.612 0.868 L -1.244 0.868 L -1.116 1.041 L -0.823 1.286 L -0.477 1.449 L -0.101 1.523 L 0.28 1.5 L 0.644 1.384 L 0.969 1.18 L 1.251 0.868 L 3.612 0.868 L 3.612 2.703 L 0.077 3.297 L -0.077 3.297 L -3.612 2.703 L -3.612 1.154 L -3.612 1.154 L -3.612 1.154 L -3.612 1.154 M -3.157 -0.868 L -3.163 -0.868 L -3.612 -0.868 L -3.612 -2.703 L -0.171 -3.288 L 0.171 -3.288 L 3.612 -2.703 L 3.612 -0.868 L 1.244 -0.868 L 1.112 -1.046 L 0.818 -1.289 L 0.471 -1.452 L 0.096 -1.523 L -0.286 -1.5 L -0.65 -1.381 L -0.973 -1.176 L -1.252 -0.868 L -3.157 -0.868 L -3.157 -0.868 L -3.157 -0.868 L -3.157 -0.868 M 5.348 -2.402 L 5.348 -2.408 L 12.068 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.827 L 12.508 1.054 L 12.303 1.175 L 12.069 1.26 L 5.348 2.408 L 5.348 0.868 L 11.7 0.868 L 11.7 -0.868 L 5.348 -0.868 L 5.348 -2.402 L 5.348 -2.402 L 5.348 -2.402 L 5.348 -2.402' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -15.871 -0.017 L -15.717 1.099 L -15.179 2.363 L -13.561 3.783 L 0.0 6.132 L 13.326 3.831 L 14.328 3.22 L 15.222 2.222 L 15.738 1.036 L 15.861 -0.017 L 15.722 -1.089 L 15.264 -2.164 L 14.577 -2.997 L 13.406 -3.809 L 0.0 -6.121 L -13.581 -3.787 L -15.165 -2.355 L -15.703 -1.129 L -15.871 -0.017 L -15.871 -0.017 L -15.871 -0.017 L -15.871 -0.017 M -12.113 0.898 L -12.722 0.289 L -12.72 -0.275 L -11.98 0.465 L -11.98 -0.101 L -12.526 -0.646 L -12.21 -0.896 L -11.98 -0.666 L -11.98 -0.666 L -11.98 -0.666 L -11.98 -0.666 M -10.808 -1.191 L -10.765 -1.148 L -10.324 -1.273 L -10.199 -1.148 L -9.841 -1.356 L -9.633 -1.148 L -9.358 -1.439 L -9.068 -1.148 L -8.875 -1.521 L -8.502 -1.148 L -8.392 -1.604 L -7.936 -1.148 L -7.909 -1.686 L -7.371 -1.148 L -6.805 -1.148 L -7.426 -1.769 L -6.943 -1.851 L -6.239 -1.148 L -5.765 -1.239 L -6.459 -1.934 L -5.976 -2.016 L -5.628 -1.668 L -5.628 -1.668 L -5.628 -1.668 L -5.628 -1.668 M -5.628 1.726 L -6.206 1.148 L -6.772 1.148 L -5.888 2.032 L -6.57 1.915 L -7.337 1.148 L -7.903 1.148 L -7.253 1.798 L -7.935 1.682 L -8.469 1.148 L -8.617 1.565 L -9.034 1.148 L -9.299 1.449 L -9.6 1.148 L -9.982 1.332 L -10.166 1.148 L -10.664 1.215 L -10.731 1.148 L -10.731 1.148 L -10.731 1.148 L -10.731 1.148 M 3.332 1.635 L 2.845 1.148 L 2.279 1.148 L 3.332 2.201 L 3.075 2.509 L 1.714 1.148 L 1.267 1.267 L 2.591 2.591 L 2.106 2.672 L 0.954 1.52 L 0.57 1.701 L 1.622 2.753 L 1.138 2.835 L 0.095 1.792 L -0.54 1.722 L 0.653 2.916 L 0.169 2.998 L -1.68 1.148 L -2.246 1.148 L -0.461 2.933 L -1.137 2.823 L -2.812 1.148 L -3.241 1.285 L -1.812 2.713 L -2.488 2.603 L -3.332 1.759 L -3.332 2.325 L -3.163 2.493 L -3.163 2.493 L -3.163 2.493 L -3.163 2.493 M -3.332 -1.635 L -2.845 -1.148 L -2.279 -1.148 L -3.332 -2.201 L -3.076 -2.51 L -1.714 -1.148 L -1.714 -1.148 L -1.714 -1.148 L -1.714 -1.148 M -2.592 -2.592 L -1.268 -1.268 L -0.954 -1.52 L -2.109 -2.675 L -1.625 -2.757 L -0.57 -1.702 L -0.095 -1.792 L -1.142 -2.839 L -0.658 -2.921 L 0.539 -1.724 L 1.68 -1.148 L -0.175 -3.003 L 0.435 -2.959 L 2.246 -1.148 L 2.812 -1.148 L 1.117 -2.843 L 1.798 -2.727 L 3.241 -1.285 L 3.332 -1.759 L 2.48 -2.612 L 3.161 -2.496 L 3.332 -2.325 L 3.332 -2.325 L 3.332 -2.325 L 3.332 -2.325 M 5.628 -1.726 L 6.206 -1.148 L 6.772 -1.148 L 5.888 -2.032 L 6.57 -1.915 L 7.337 -1.148 L 7.903 -1.148 L 7.253 -1.798 L 7.935 -1.682 L 8.469 -1.148 L 8.617 -1.565 L 9.034 -1.148 L 9.3 -1.448 L 9.6 -1.148 L 9.982 -1.332 L 10.166 -1.148 L 10.664 -1.215 L 10.731 -1.148 L 10.731 -1.148 L 10.731 -1.148 L 10.731 -1.148 M 12.113 -0.898 L 12.722 -0.289 L 12.72 0.275 L 11.98 -0.465 L 11.98 0.101 L 12.53 0.651 L 12.212 0.898 L 11.98 0.666 L 11.98 0.666 L 11.98 0.666 L 11.98 0.666 M 10.808 1.191 L 10.765 1.148 L 10.325 1.274 L 10.199 1.148 L 9.842 1.356 L 9.633 1.148 L 9.358 1.439 L 9.068 1.148 L 8.875 1.521 L 8.502 1.148 L 8.392 1.604 L 7.936 1.148 L 7.909 1.686 L 7.371 1.148 L 6.805 1.148 L 7.426 1.769 L 6.943 1.851 L 6.239 1.148 L 5.765 1.239 L 6.459 1.934 L 5.976 2.017 L 5.628 1.668 L 5.628 1.668 L 5.628 1.668 L 5.628 1.668' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:0.6' inkscape:groupmode='layer' inkscape:label='Layer 1, z:0.6' transform='translate(280.0, 213.172)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.6' fill='#000' stroke='none' y='15' >Layer 1, z:0.6</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.259 -2.626 L -5.259 -0.779 L -11.5 -0.779 L -11.5 0.779 L -5.259 0.779 L -5.259 2.626 L -12.123 1.453 L -12.477 1.312 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.087 L -13.238 -0.188 L -13.145 -0.552 z M 1.072 -0.779 L 0.907 -0.966 L 0.638 -1.161 L 0.33 -1.283 L 0.0 -1.325 L -0.33 -1.283 L -0.638 -1.161 L -0.907 -0.966 L -1.072 -0.779 L -3.701 -0.779 L -3.701 -2.891 L -0.188 -3.488 L 0.188 -3.488 L 3.701 -2.891 L 3.701 -0.779 z M -1.072 0.779 L -0.845 1.021 L -0.564 1.199 L -0.248 1.302 L 0.083 1.322 L 0.409 1.26 L 0.707 1.121 L 1.09 0.779 L 3.701 0.779 L 3.701 2.891 L 0.094 3.497 L -0.094 3.497 L -3.701 2.891 L -3.701 0.779 z M 5.259 2.626 L 5.259 0.779 L 11.5 0.779 L 11.5 -0.779 L 5.259 -0.779 L 5.259 -2.626 L 12.123 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.389 1.357 L 12.123 1.453 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.79 -0.774 L -12.577 -1.001 L -12.3 -1.176 L -12.072 -1.259 L -5.459 -2.389 L -5.459 -0.979 L -11.7 -0.979 L -11.7 0.979 L -5.459 0.979 L -5.459 2.389 L -12.069 1.259 L -12.38 1.136 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.072 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.79 -0.774 L -12.79 -0.774 L -12.79 -0.774 L -12.79 -0.774 M -3.47 -0.979 L -3.501 -0.979 L -3.501 -1.259 L -3.501 -2.722 L -0.171 -3.288 L 0.171 -3.288 L 3.501 -2.722 L 3.501 -0.979 L 1.162 -0.979 L 1.042 -1.115 L 0.735 -1.338 L 0.38 -1.478 L 0.0 -1.527 L -0.38 -1.478 L -0.735 -1.338 L -1.042 -1.115 L -1.162 -0.979 L -3.47 -0.979 L -3.47 -0.979 L -3.47 -0.979 L -3.47 -0.979 M 2.645 0.979 L 2.956 0.979 L 3.501 0.979 L 3.501 2.722 L 0.077 3.297 L -0.077 3.297 L -3.501 2.722 L -3.501 0.979 L -1.159 0.979 L -0.973 1.176 L -0.65 1.381 L -0.286 1.5 L 0.096 1.523 L 0.471 1.452 L 0.818 1.289 L 1.166 0.979 L 2.645 0.979 L 2.645 0.979 L 2.645 0.979 L 2.645 0.979 M 5.459 1.57 L 5.459 1.259 L 5.459 0.979 L 11.7 0.979 L 11.7 -0.979 L 5.459 -0.979 L 5.459 -2.389 L 12.069 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.511 1.053 L 12.304 1.175 L 12.072 1.259 L 5.459 2.389 L 5.459 1.57 L 5.459 1.57 L 5.459 1.57 L 5.459 1.57' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -15.871 -0.017 L -15.717 1.099 L -15.179 2.363 L -13.561 3.783 L 0.0 6.132 L 13.326 3.831 L 14.328 3.22 L 15.222 2.222 L 15.738 1.036 L 15.861 -0.017 L 15.722 -1.089 L 15.264 -2.164 L 14.577 -2.997 L 13.406 -3.809 L 0.0 -6.121 L -13.581 -3.787 L -15.165 -2.355 L -15.703 -1.129 L -15.871 -0.017 L -15.871 -0.017 L -15.871 -0.017 L -15.871 -0.017 M -12.089 -0.922 L -12.715 -0.296 L -12.723 0.278 L -11.98 -0.465 L -11.98 0.101 L -12.525 0.645 L -12.214 0.9 L -11.98 0.666 L -11.98 0.666 L -11.98 0.666 L -11.98 0.666 M -9.841 1.356 L -9.744 1.259 L -9.358 1.439 L -9.179 1.259 L -8.875 1.521 L -8.613 1.259 L -8.392 1.604 L -8.047 1.259 L -7.909 1.686 L -7.482 1.259 L -7.426 1.769 L -6.916 1.259 L -6.35 1.259 L -6.943 1.851 L -6.459 1.934 L -5.876 1.35 L -5.739 1.779 L -5.976 2.016 L -5.976 2.016 L -5.976 2.016 L -5.976 2.016 M -5.739 -1.615 L -6.095 -1.259 L -6.661 -1.259 L -5.909 -2.01 L -6.57 -1.915 L -7.226 -1.259 L -7.253 -1.798 L -7.792 -1.259 L -7.935 -1.682 L -8.358 -1.259 L -8.617 -1.565 L -8.923 -1.259 L -9.299 -1.449 L -9.489 -1.259 L -9.982 -1.332 L -10.055 -1.259 L -10.055 -1.259 L -10.055 -1.259 L -10.055 -1.259 M -3.221 -2.436 L -3.161 -2.496 L -2.479 -2.612 L -3.221 -1.87 L -3.13 -1.396 L -1.798 -2.728 L -1.116 -2.843 L -2.701 -1.259 L -2.135 -1.259 L -0.435 -2.959 L 0.175 -3.003 L -1.569 -1.259 L -0.551 -1.712 L 0.658 -2.921 L 1.142 -2.839 L 0.099 -1.796 L 0.572 -1.703 L 1.625 -2.757 L 2.109 -2.675 L 0.954 -1.52 L 1.272 -1.272 L 2.592 -2.592 L 3.076 -2.51 L 1.825 -1.259 L 2.39 -1.259 L 3.221 -2.09 L 3.221 -1.524 L 2.956 -1.259 L 2.956 -1.259 L 2.956 -1.259 L 2.956 -1.259 M 3.221 2.436 L 3.162 2.495 L 2.482 2.609 L 3.221 1.87 L 3.13 1.396 L 1.802 2.723 L 1.122 2.838 L 2.701 1.259 L 2.135 1.259 L 0.442 2.952 L -0.155 2.983 L 1.569 1.259 L 0.539 1.724 L -0.641 2.904 L -1.128 2.825 L -0.095 1.792 L -0.57 1.702 L -1.615 2.746 L -2.101 2.667 L -0.954 1.52 L -1.27 1.27 L -2.588 2.588 L -3.074 2.509 L -1.825 1.259 L -2.39 1.259 L -3.221 2.09 L -3.221 1.524 L -2.956 1.259 L -2.956 1.259 L -2.956 1.259 L -2.956 1.259 M 5.739 1.615 L 6.095 1.259 L 6.661 1.259 L 5.909 2.01 L 6.57 1.915 L 7.226 1.259 L 7.253 1.798 L 7.792 1.259 L 7.935 1.682 L 8.358 1.259 L 8.617 1.565 L 8.923 1.259 L 9.299 1.449 L 9.489 1.259 L 9.982 1.332 L 10.055 1.259 L 10.055 1.259 L 10.055 1.259 L 10.055 1.259 M 12.089 0.922 L 12.713 0.298 L 12.724 -0.279 L 11.98 0.465 L 11.98 -0.101 L 12.525 -0.645 L 12.214 -0.9 L 11.98 -0.666 L 11.98 -0.666 L 11.98 -0.666 L 11.98 -0.666 M 9.841 -1.356 L 9.744 -1.259 L 9.358 -1.439 L 9.179 -1.259 L 8.875 -1.521 L 8.613 -1.259 L 8.392 -1.604 L 8.047 -1.259 L 7.909 -1.686 L 7.482 -1.259 L 7.426 -1.769 L 6.916 -1.259 L 6.35 -1.259 L 6.943 -1.851 L 6.459 -1.934 L 5.876 -1.35 L 5.739 -1.779 L 5.976 -2.016 L 5.976 -2.016 L 5.976 -2.016 L 5.976 -2.016' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:0.8' inkscape:groupmode='layer' inkscape:label='Layer 2, z:0.8' transform='translate(280.0, 301.008)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate0.8' fill='#000' stroke='none' y='15' >Layer 2, z:0.8</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.309 -2.618 L -5.309 -0.829 L -11.5 -0.829 L -11.5 0.829 L -5.309 0.829 L -5.309 2.618 L -12.123 1.453 L -12.473 1.314 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M 0.71 -1.119 L 0.409 -1.26 L 0.083 -1.322 L -0.248 -1.302 L -0.564 -1.199 L -0.845 -1.021 L -1.033 -0.829 L -3.651 -0.829 L -3.651 -2.9 L -0.188 -3.488 L 0.188 -3.488 L 3.651 -2.9 L 3.651 -0.829 L 1.033 -0.829 L 0.845 -1.021 z M 5.309 2.618 L 5.309 0.829 L 11.5 0.829 L 11.5 -0.829 L 5.309 -0.829 L 5.309 -2.618 L 12.12 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.389 1.357 L 12.123 1.453 z M -1.033 0.829 L -0.907 0.966 L -0.638 1.161 L -0.33 1.283 L 0.0 1.325 L 0.33 1.283 L 0.638 1.161 L 0.907 0.966 L 1.033 0.829 L 3.651 0.829 L 3.651 2.9 L 0.094 3.497 L -0.094 3.497 L -3.651 2.9 L -3.651 0.829 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.422 -1.099 L -12.3 -1.176 L -12.072 -1.259 L -5.509 -2.381 L -5.509 -1.029 L -11.7 -1.029 L -11.7 1.029 L -5.509 1.029 L -5.509 2.381 L -12.069 1.259 L -12.376 1.137 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.577 -1.001 L -12.422 -1.099 L -12.422 -1.099 L -12.422 -1.099 L -12.422 -1.099 M -3.451 -2.012 L -3.451 -2.731 L -0.171 -3.288 L 0.171 -3.288 L 3.451 -2.731 L 3.451 -1.029 L 1.117 -1.029 L 0.976 -1.173 L 0.812 -1.292 L 0.471 -1.452 L 0.096 -1.523 L -0.286 -1.5 L -0.65 -1.381 L -0.972 -1.178 L -1.117 -1.029 L -3.451 -1.029 L -3.451 -1.829 L -3.451 -2.012 L -3.451 -2.012 L -3.451 -2.012 L -3.451 -2.012 M 5.69 -2.35 L 12.066 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.511 1.053 L 12.304 1.175 L 12.072 1.259 L 5.509 2.381 L 5.509 1.029 L 11.7 1.029 L 11.7 -1.029 L 5.509 -1.029 L 5.509 -2.381 L 5.69 -2.35 L 5.69 -2.35 L 5.69 -2.35 L 5.69 -2.35 M 3.451 2.012 L 3.451 2.731 L 0.077 3.297 L -0.077 3.297 L -3.451 2.731 L -3.451 1.029 L -1.121 1.029 L -1.041 1.116 L -0.735 1.338 L -0.38 1.478 L 0.0 1.527 L 0.38 1.478 L 0.735 1.338 L 1.041 1.116 L 1.121 1.029 L 3.451 1.029 L 3.451 1.829 L 3.451 2.012 L 3.451 2.012 L 3.451 2.012 L 3.451 2.012' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -11.98 -0.666 L -12.206 -0.892 L -12.526 -0.646 L -11.98 -0.101 L -11.98 0.465 L -12.72 -0.275 L -12.722 0.289 L -12.077 0.934 L -12.077 0.934 L -12.077 0.934 L -12.077 0.934 M -5.789 1.565 L -6.045 1.309 L -6.611 1.309 L -5.936 1.983 L -6.57 1.915 L -7.176 1.309 L -7.252 1.799 L -7.742 1.309 L -7.935 1.682 L -8.308 1.309 L -8.617 1.565 L -8.873 1.309 L -9.299 1.449 L -9.439 1.309 L -9.439 1.309 L -9.439 1.309 L -9.439 1.309 M -9.841 -1.356 L -9.794 -1.309 L -9.358 -1.439 L -9.229 -1.309 L -8.875 -1.521 L -8.663 -1.309 L -8.392 -1.604 L -8.097 -1.309 L -7.909 -1.687 L -7.532 -1.309 L -7.426 -1.769 L -6.966 -1.309 L -6.943 -1.852 L -6.4 -1.309 L -5.926 -1.4 L -6.46 -1.934 L -5.977 -2.017 L -5.789 -1.829 L -5.789 -1.829 L -5.789 -1.829 L -5.789 -1.829 M -3.171 -2.04 L -2.44 -1.309 L -1.875 -1.309 L -3.076 -2.511 L -3.076 -2.511 L -3.076 -2.511 L -3.076 -2.511 M -2.593 -2.593 L -1.309 -1.309 L -0.954 -1.52 L -2.109 -2.675 L -1.626 -2.757 L -0.57 -1.702 L -0.095 -1.792 L -1.142 -2.839 L -0.658 -2.921 L 0.539 -1.724 L 1.519 -1.309 L -0.175 -3.003 L 0.435 -2.959 L 2.085 -1.309 L 2.651 -1.309 L 1.116 -2.844 L 1.798 -2.728 L 3.08 -1.446 L 3.171 -1.92 L 2.479 -2.612 L 3.171 -2.486 L 3.171 -2.486 L 3.171 -2.486 L 3.171 -2.486 M 5.789 -1.565 L 6.045 -1.309 L 6.611 -1.309 L 5.936 -1.983 L 6.57 -1.915 L 7.176 -1.309 L 7.252 -1.799 L 7.742 -1.309 L 7.935 -1.682 L 8.308 -1.309 L 8.617 -1.565 L 8.873 -1.309 L 9.3 -1.448 L 9.439 -1.309 L 9.439 -1.309 L 9.439 -1.309 L 9.439 -1.309 M 11.98 0.666 L 12.209 0.896 L 12.53 0.651 L 11.98 0.101 L 11.98 -0.465 L 12.72 0.275 L 12.722 -0.289 L 12.076 -0.935 L 12.076 -0.935 L 12.076 -0.935 L 12.076 -0.935 M 9.841 1.356 L 9.794 1.309 L 9.358 1.439 L 9.229 1.309 L 8.875 1.521 L 8.663 1.309 L 8.392 1.604 L 8.097 1.309 L 7.909 1.687 L 7.532 1.309 L 7.426 1.769 L 6.966 1.309 L 6.943 1.852 L 6.4 1.309 L 5.926 1.4 L 6.46 1.934 L 5.977 2.017 L 5.789 1.829 L 5.789 1.829 L 5.789 1.829 L 5.789 1.829 M 3.171 2.04 L 2.44 1.309 L 1.875 1.309 L 3.076 2.51 L 2.591 2.591 L 1.309 1.309 L 0.956 1.522 L 2.107 2.672 L 1.622 2.754 L 0.572 1.703 L 0.099 1.796 L 1.138 2.835 L 0.654 2.916 L -0.551 1.712 L -1.519 1.309 L 0.169 2.998 L -0.461 2.934 L -2.085 1.309 L -2.651 1.309 L -1.136 2.824 L -1.811 2.714 L -3.08 1.446 L -3.171 1.92 L -2.486 2.605 L -3.171 2.486 L -3.171 2.486 L -3.171 2.486 L -3.171 2.486' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:1.0' inkscape:groupmode='layer' inkscape:label='Layer 3, z:1.0' transform='translate(280.0, 388.844)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.0' fill='#000' stroke='none' y='15' >Layer 3, z:1.0</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.309 -2.618 L -5.309 -0.829 L -11.5 -0.829 L -11.5 0.829 L -5.309 0.829 L -5.309 2.618 L -12.123 1.453 L -12.474 1.314 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M -1.033 0.829 L -0.907 0.966 L -0.638 1.161 L -0.33 1.283 L 0.0 1.325 L 0.33 1.283 L 0.638 1.161 L 0.907 0.966 L 1.033 0.829 L 3.651 0.829 L 3.651 2.9 L 0.094 3.497 L -0.094 3.497 L -3.651 2.9 L -3.651 0.829 z M 5.309 2.618 L 5.309 0.829 L 11.5 0.829 L 11.5 -0.829 L 5.309 -0.829 L 5.309 -2.618 L 12.119 -1.454 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.389 1.357 L 12.123 1.453 z M 3.651 -2.9 L 3.651 -0.829 L 1.033 -0.829 L 0.779 -1.072 L 0.488 -1.232 L 0.166 -1.315 L -0.166 -1.315 L -0.488 -1.232 L -0.779 -1.072 L -1.033 -0.829 L -3.651 -0.829 L -3.651 -2.9 L -0.094 -3.497 L 0.094 -3.497 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.661 -0.912 L -12.577 -1.001 L -12.3 -1.176 L -12.072 -1.259 L -5.509 -2.381 L -5.509 -1.029 L -11.7 -1.029 L -11.7 1.029 L -5.509 1.029 L -5.509 2.381 L -12.069 1.259 L -12.377 1.137 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.661 -0.912 L -12.661 -0.912 L -12.661 -0.912 L -12.661 -0.912 M -3.451 1.951 L -3.451 1.829 L -3.451 1.029 L -1.121 1.029 L -1.041 1.116 L -0.735 1.338 L -0.38 1.478 L 0.0 1.527 L 0.38 1.478 L 0.735 1.338 L 1.041 1.116 L 1.121 1.029 L 3.451 1.029 L 3.451 2.731 L 0.077 3.297 L -0.077 3.297 L -3.451 2.731 L -3.451 1.951 L -3.451 1.951 L -3.451 1.951 L -3.451 1.951 M 5.63 2.36 L 5.509 2.381 L 5.509 1.029 L 11.7 1.029 L 11.7 -1.029 L 5.509 -1.029 L 5.509 -2.381 L 12.065 -1.26 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.511 1.053 L 12.304 1.175 L 12.072 1.259 L 5.63 2.36 L 5.63 2.36 L 5.63 2.36 L 5.63 2.36 M 3.451 -1.151 L 3.451 -1.029 L 1.113 -1.029 L 0.898 -1.235 L 0.562 -1.419 L 0.191 -1.515 L -0.191 -1.515 L -0.562 -1.419 L -0.898 -1.235 L -1.113 -1.029 L -3.451 -1.029 L -3.451 -2.731 L -0.077 -3.297 L 0.077 -3.297 L 3.451 -2.731 L 3.451 -1.151 L 3.451 -1.151 L 3.451 -1.151 L 3.451 -1.151' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -11.98 0.666 L -12.214 0.901 L -12.525 0.645 L -11.98 0.101 L -11.98 -0.465 L -12.724 0.279 L -12.715 -0.296 L -12.078 -0.933 L -12.078 -0.933 L -12.078 -0.933 L -12.078 -0.933 M -5.789 -1.565 L -6.045 -1.309 L -6.611 -1.309 L -5.936 -1.983 L -6.57 -1.915 L -7.176 -1.309 L -7.252 -1.799 L -7.742 -1.309 L -7.935 -1.682 L -8.308 -1.309 L -8.617 -1.565 L -8.873 -1.309 L -9.299 -1.449 L -9.439 -1.309 L -9.439 -1.309 L -9.439 -1.309 L -9.439 -1.309 M -9.229 1.309 L -9.358 1.439 L -9.794 1.309 L -9.841 1.356 L -9.841 1.356 L -9.841 1.356 L -9.841 1.356 M -8.875 1.521 L -8.663 1.309 L -8.392 1.604 L -8.097 1.309 L -7.909 1.687 L -7.532 1.309 L -7.426 1.769 L -6.966 1.309 L -6.943 1.852 L -6.4 1.309 L -5.926 1.4 L -6.46 1.934 L -5.977 2.017 L -5.789 1.829 L -5.789 1.829 L -5.789 1.829 L -5.789 1.829 M -3.171 2.04 L -2.44 1.309 L -1.875 1.309 L -3.075 2.509 L -2.588 2.588 L -1.309 1.309 L -0.956 1.522 L -2.102 2.667 L -1.615 2.746 L -0.572 1.703 L -0.099 1.796 L -1.128 2.825 L -0.641 2.904 L 0.551 1.712 L 1.519 1.309 L -0.155 2.983 L 0.442 2.952 L 2.085 1.309 L 2.651 1.309 L 1.122 2.838 L 1.802 2.724 L 3.08 1.446 L 3.171 1.92 L 2.482 2.61 L 3.171 2.486 L 3.171 2.486 L 3.171 2.486 L 3.171 2.486 M 5.789 1.565 L 6.045 1.309 L 6.611 1.309 L 5.936 1.983 L 6.57 1.915 L 7.176 1.309 L 7.252 1.799 L 7.742 1.309 L 7.935 1.682 L 8.308 1.309 L 8.617 1.565 L 8.873 1.309 L 9.299 1.449 L 9.439 1.309 L 9.439 1.309 L 9.439 1.309 L 9.439 1.309 M 9.229 -1.309 L 9.358 -1.439 L 9.794 -1.309 L 9.842 -1.356 L 9.842 -1.356 L 9.842 -1.356 L 9.842 -1.356 M 8.875 -1.521 L 8.663 -1.309 L 8.392 -1.604 L 8.097 -1.309 L 7.909 -1.687 L 7.532 -1.309 L 7.426 -1.769 L 6.966 -1.309 L 6.943 -1.852 L 6.4 -1.309 L 5.926 -1.4 L 6.46 -1.934 L 5.977 -2.017 L 5.789 -1.829 L 5.789 -1.829 L 5.789 -1.829 L 5.789 -1.829 M 11.98 -0.666 L 12.214 -0.9 L 12.525 -0.645 L 11.98 -0.101 L 11.98 0.465 L 12.724 -0.279 L 12.713 0.298 L 12.078 0.933 L 12.078 0.933 L 12.078 0.933 L 12.078 0.933 M -3.171 -2.486 L -2.486 -2.605 L -3.171 -1.92 L -3.08 -1.446 L -1.811 -2.714 L -1.136 -2.824 L -2.651 -1.309 L -2.085 -1.309 L -0.461 -2.934 L 0.169 -2.998 L -1.519 -1.309 L -0.551 -1.711 L 0.654 -2.916 L 1.138 -2.835 L 0.098 -1.795 L 0.574 -1.705 L 1.622 -2.754 L 2.107 -2.672 L 0.956 -1.522 L 1.309 -1.309 L 2.591 -2.591 L 3.076 -2.51 L 1.875 -1.309 L 2.44 -1.309 L 3.171 -2.04 L 3.171 -2.04 L 3.171 -2.04 L 3.171 -2.04' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:1.2' inkscape:groupmode='layer' inkscape:label='Layer 4, z:1.2' transform='translate(280.0, 476.68)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.2' fill='#000' stroke='none' y='15' >Layer 4, z:1.2</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.259 -2.626 L -5.259 -0.779 L -11.5 -0.779 L -11.5 0.779 L -5.259 0.779 L -5.259 2.626 L -12.123 1.453 L -12.473 1.314 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M -1.072 0.779 L -0.845 1.021 L -0.564 1.199 L -0.248 1.302 L 0.083 1.322 L 0.409 1.26 L 0.707 1.121 L 1.09 0.779 L 3.701 0.779 L 3.701 2.891 L 0.094 3.497 L -0.094 3.497 L -3.701 2.891 L -3.701 0.779 z M 5.259 2.626 L 5.259 0.779 L 11.5 0.779 L 11.5 -0.779 L 5.259 -0.779 L 5.259 -2.626 L 12.123 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.389 1.357 L 12.123 1.453 z M 3.701 -2.891 L 3.701 -0.779 L 1.09 -0.779 L 0.707 -1.121 L 0.409 -1.26 L 0.083 -1.322 L -0.248 -1.302 L -0.564 -1.199 L -0.845 -1.021 L -1.072 -0.779 L -3.701 -0.779 L -3.701 -2.891 L -0.094 -3.497 L 0.094 -3.497 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.849 -0.674 L -12.8 -0.763 L -12.577 -1.001 L -12.3 -1.176 L -12.072 -1.259 L -5.459 -2.389 L -5.459 -0.979 L -11.7 -0.979 L -11.7 0.979 L -5.459 0.979 L -5.459 2.389 L -12.069 1.259 L -12.376 1.137 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.849 -0.674 L -12.849 -0.674 L -12.849 -0.674 L -12.849 -0.674 M -3.501 1.687 L -3.501 1.259 L -3.501 0.979 L -1.159 0.979 L -0.973 1.176 L -0.65 1.381 L -0.286 1.5 L 0.096 1.523 L 0.471 1.452 L 0.818 1.289 L 1.166 0.979 L 3.501 0.979 L 3.501 2.722 L 0.077 3.297 L -0.077 3.297 L -3.501 2.722 L -3.501 1.687 L -3.501 1.687 L -3.501 1.687 L -3.501 1.687 M 5.459 1.952 L 5.459 1.524 L 5.459 0.979 L 11.7 0.979 L 11.7 -0.979 L 5.459 -0.979 L 5.459 -2.389 L 12.069 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.511 1.053 L 12.304 1.175 L 12.072 1.259 L 5.459 2.389 L 5.459 1.952 L 5.459 1.952 L 5.459 1.952 L 5.459 1.952 M 3.501 -1.407 L 3.501 -0.979 L 1.166 -0.979 L 0.818 -1.289 L 0.471 -1.452 L 0.096 -1.523 L -0.286 -1.5 L -0.65 -1.381 L -0.973 -1.176 L -1.159 -0.979 L -3.501 -0.979 L -3.501 -2.722 L -0.077 -3.297 L 0.077 -3.297 L 3.501 -2.722 L 3.501 -1.407 L 3.501 -1.407 L 3.501 -1.407 L 3.501 -1.407' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.088 0.923 L -12.722 0.289 L -12.72 -0.275 L -11.98 0.465 L -11.98 -0.101 L -12.526 -0.646 L -12.207 -0.893 L -11.98 -0.666 L -11.98 -0.666 L -11.98 -0.666 L -11.98 -0.666 M -9.841 -1.356 L -9.744 -1.259 L -9.358 -1.439 L -9.179 -1.259 L -8.875 -1.521 L -8.613 -1.259 L -8.392 -1.604 L -8.047 -1.259 L -7.909 -1.686 L -7.482 -1.259 L -7.426 -1.769 L -6.916 -1.259 L -6.35 -1.259 L -6.943 -1.851 L -6.459 -1.934 L -5.876 -1.35 L -5.739 -1.779 L -5.976 -2.016 L -5.976 -2.016 L -5.976 -2.016 L -5.976 -2.016 M -5.739 1.615 L -6.095 1.259 L -6.661 1.259 L -5.909 2.01 L -6.57 1.915 L -7.226 1.259 L -7.253 1.798 L -7.792 1.259 L -7.935 1.682 L -8.358 1.259 L -8.617 1.565 L -8.923 1.259 L -9.299 1.449 L -9.489 1.259 L -9.982 1.332 L -10.055 1.259 L -10.055 1.259 L -10.055 1.259 L -10.055 1.259 M 3.075 2.509 L 1.825 1.259 L 1.266 1.266 L 2.591 2.591 L 2.106 2.672 L 0.965 1.53 L 0.579 1.71 L 1.622 2.754 L 1.138 2.835 L 0.107 1.804 L -0.556 1.706 L 0.654 2.916 L 0.169 2.998 L -1.569 1.259 L -2.135 1.259 L -0.461 2.933 L -1.136 2.824 L -2.701 1.259 L -3.13 1.396 L -1.812 2.714 L -2.487 2.604 L -3.221 1.87 L -3.221 2.436 L -3.162 2.494 L -3.162 2.494 L -3.162 2.494 L -3.162 2.494 M 3.221 2.09 L 2.39 1.259 L 2.956 1.259 L 3.221 1.524 L 3.221 1.524 L 3.221 1.524 L 3.221 1.524 M 9.841 1.356 L 9.744 1.259 L 9.358 1.439 L 9.179 1.259 L 8.875 1.521 L 8.613 1.259 L 8.392 1.604 L 8.047 1.259 L 7.909 1.686 L 7.482 1.259 L 7.426 1.769 L 6.916 1.259 L 6.35 1.259 L 6.943 1.851 L 6.459 1.934 L 5.876 1.35 L 5.739 1.779 L 5.976 2.016 L 5.976 2.016 L 5.976 2.016 L 5.976 2.016 M 5.739 -1.615 L 6.095 -1.259 L 6.661 -1.259 L 5.909 -2.01 L 6.57 -1.915 L 7.226 -1.259 L 7.253 -1.798 L 7.792 -1.259 L 7.935 -1.682 L 8.358 -1.259 L 8.617 -1.565 L 8.923 -1.259 L 9.299 -1.449 L 9.489 -1.259 L 9.982 -1.332 L 10.055 -1.259 L 10.055 -1.259 L 10.055 -1.259 L 10.055 -1.259 M 12.088 -0.923 L 12.722 -0.289 L 12.72 0.275 L 11.98 -0.465 L 11.98 0.101 L 12.53 0.651 L 12.21 0.897 L 11.98 0.666 L 11.98 0.666 L 11.98 0.666 L 11.98 0.666 M -2.588 -2.588 L -1.27 -1.27 L -0.954 -1.52 L -2.101 -2.667 L -1.615 -2.746 L -0.57 -1.702 L -0.095 -1.792 L -1.128 -2.825 L -0.641 -2.904 L 0.539 -1.724 L 1.569 -1.259 L -0.155 -2.983 L 0.442 -2.952 L 2.135 -1.259 L 2.701 -1.259 L 1.122 -2.838 L 1.802 -2.723 L 3.13 -1.396 L 3.221 -1.87 L 2.482 -2.609 L 3.162 -2.495 L 3.221 -2.436 L 3.221 -2.436 L 3.221 -2.436 L 3.221 -2.436 M -3.074 -2.509 L -1.825 -1.259 L -2.39 -1.259 L -3.221 -2.09 L -3.221 -1.524 L -2.956 -1.259 L -2.956 -1.259 L -2.956 -1.259 L -2.956 -1.259' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:1.4' inkscape:groupmode='layer' inkscape:label='Layer 5, z:1.4' transform='translate(280.0, 564.517)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.4' fill='#000' stroke='none' y='15' >Layer 5, z:1.4</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -5.148 -2.645 L -5.148 -0.668 L -11.5 -0.668 L -11.5 0.668 L -5.148 0.668 L -5.148 2.645 L -12.123 1.453 L -12.473 1.314 L -12.777 1.093 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M 1.143 -0.668 L 1.021 -0.845 L 0.779 -1.072 L 0.488 -1.232 L 0.166 -1.315 L -0.166 -1.315 L -0.488 -1.232 L -0.779 -1.072 L -1.021 -0.845 L -1.143 -0.668 L -3.812 -0.668 L -3.812 -2.872 L -0.188 -3.488 L 0.188 -3.488 L 3.812 -2.872 L 3.812 -0.668 z M -1.143 0.668 L -0.907 0.966 L -0.779 1.072 L -0.488 1.232 L -0.166 1.315 L 0.166 1.315 L 0.488 1.232 L 0.779 1.072 L 0.907 0.966 L 1.143 0.668 L 3.812 0.668 L 3.812 2.872 L 0.188 3.488 L -0.094 3.497 L -3.812 2.872 L -3.812 0.668 z M 5.148 -0.668 L 5.148 -2.645 L 12.123 -1.453 L 12.389 -1.357 L 12.706 -1.156 L 12.963 -0.882 L 13.145 -0.552 L 13.238 -0.188 L 13.238 0.188 L 13.145 0.552 L 12.963 0.882 L 12.706 1.156 L 12.389 1.357 L 12.123 1.453 L 5.148 2.645 L 5.148 0.668 L 11.5 0.668 L 11.5 -0.668 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.521 -1.037 L -12.3 -1.176 L -12.072 -1.259 L -5.348 -2.408 L -5.348 -0.868 L -11.7 -0.868 L -11.7 0.868 L -5.348 0.868 L -5.348 2.408 L -12.069 1.259 L -12.376 1.137 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.577 -1.001 L -12.521 -1.037 L -12.521 -1.037 L -12.521 -1.037 L -12.521 -1.037 M -3.612 -1.215 L -3.612 -2.703 L -0.171 -3.288 L 0.171 -3.288 L 3.612 -2.703 L 3.612 -0.868 L 1.248 -0.868 L 1.173 -0.976 L 0.897 -1.235 L 0.562 -1.419 L 0.191 -1.515 L -0.191 -1.515 L -0.562 -1.419 L -0.897 -1.235 L -1.173 -0.976 L -1.248 -0.868 L -3.612 -0.868 L -3.612 -1.148 L -3.612 -1.215 L -3.612 -1.215 L -3.612 -1.215 L -3.612 -1.215 M 1.781 0.868 L 3.612 0.868 L 3.612 2.703 L 0.168 3.289 L -0.08 3.296 L -3.612 2.703 L -3.612 0.868 L -1.24 0.868 L -1.051 1.107 L -0.892 1.238 L -0.562 1.419 L -0.191 1.515 L 0.191 1.515 L 0.562 1.419 L 0.892 1.238 L 1.051 1.107 L 1.24 0.868 L 1.714 0.868 L 1.781 0.868 L 1.781 0.868 L 1.781 0.868 L 1.781 0.868 M 5.348 2.341 L 5.348 0.868 L 11.7 0.868 L 11.7 -0.868 L 5.348 -0.868 L 5.348 -2.408 L 12.072 -1.259 L 12.3 -1.176 L 12.577 -1.001 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.8 0.763 L 12.577 1.001 L 12.3 1.176 L 12.072 1.259 L 5.348 2.408 L 5.348 2.341 L 5.348 2.341 L 5.348 2.341 L 5.348 2.341' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.114 -0.897 L -12.715 -0.296 L -12.724 0.279 L -11.98 -0.465 L -11.98 0.101 L -12.525 0.645 L -12.214 0.9 L -11.98 0.666 L -11.98 0.666 L -11.98 0.666 L -11.98 0.666 M -10.808 1.191 L -10.765 1.148 L -10.324 1.273 L -10.199 1.148 L -9.841 1.356 L -9.633 1.148 L -9.358 1.439 L -9.068 1.148 L -8.875 1.521 L -8.502 1.148 L -8.392 1.604 L -7.936 1.148 L -7.909 1.686 L -7.371 1.148 L -6.805 1.148 L -7.426 1.769 L -6.943 1.851 L -6.239 1.148 L -5.765 1.239 L -6.459 1.934 L -5.976 2.016 L -5.628 1.668 L -5.628 1.668 L -5.628 1.668 L -5.628 1.668 M -5.628 -1.726 L -6.206 -1.148 L -6.772 -1.148 L -5.888 -2.032 L -6.57 -1.915 L -7.337 -1.148 L -7.903 -1.148 L -7.253 -1.798 L -7.935 -1.682 L -8.469 -1.148 L -8.617 -1.565 L -9.034 -1.148 L -9.299 -1.449 L -9.6 -1.148 L -9.982 -1.332 L -10.166 -1.148 L -10.664 -1.215 L -10.731 -1.148 L -10.731 -1.148 L -10.731 -1.148 L -10.731 -1.148 M 2.592 -2.592 L 1.27 -1.27 L 0.956 -1.522 L 2.109 -2.675 L 1.625 -2.757 L 0.574 -1.705 L 0.098 -1.795 L 1.142 -2.839 L 0.658 -2.921 L -0.551 -1.711 L -1.68 -1.148 L 0.175 -3.003 L -0.435 -2.959 L -2.246 -1.148 L -2.812 -1.148 L -1.117 -2.843 L -1.798 -2.727 L -3.241 -1.285 L -3.332 -1.759 L -2.48 -2.612 L -3.161 -2.496 L -3.332 -2.325 L -3.332 -2.325 L -3.332 -2.325 L -3.332 -2.325 M 3.332 -1.635 L 2.845 -1.148 L 2.279 -1.148 L 3.332 -2.201 L 3.076 -2.51 L 1.714 -1.148 L 1.714 -1.148 L 1.714 -1.148 L 1.714 -1.148 M -3.332 1.635 L -2.845 1.148 L -2.279 1.148 L -3.332 2.201 L -3.075 2.509 L -1.714 1.148 L -1.275 1.275 L -2.591 2.591 L -2.106 2.672 L -0.956 1.522 L -0.574 1.705 L -1.622 2.753 L -1.138 2.835 L -0.098 1.795 L 0.551 1.711 L -0.653 2.916 L -0.169 2.998 L 1.68 1.148 L 2.246 1.148 L 0.463 2.931 L 1.138 2.822 L 2.812 1.148 L 3.241 1.285 L 1.813 2.712 L 2.488 2.603 L 3.332 1.759 L 3.332 2.325 L 3.163 2.494 L 3.163 2.494 L 3.163 2.494 L 3.163 2.494 M 5.628 1.726 L 6.206 1.148 L 6.772 1.148 L 5.888 2.032 L 6.57 1.915 L 7.337 1.148 L 7.903 1.148 L 7.253 1.798 L 7.935 1.682 L 8.469 1.148 L 8.617 1.565 L 9.034 1.148 L 9.299 1.449 L 9.6 1.148 L 9.982 1.332 L 10.166 1.148 L 10.664 1.215 L 10.731 1.148 L 10.731 1.148 L 10.731 1.148 L 10.731 1.148 M 12.114 0.897 L 12.715 0.296 L 12.72 -0.275 L 11.98 0.465 L 11.98 -0.101 L 12.526 -0.646 L 12.21 -0.896 L 11.98 -0.666 L 11.98 -0.666 L 11.98 -0.666 L 11.98 -0.666 M 10.808 -1.191 L 10.765 -1.148 L 10.324 -1.273 L 10.199 -1.148 L 9.841 -1.356 L 9.633 -1.148 L 9.358 -1.439 L 9.068 -1.148 L 8.875 -1.521 L 8.502 -1.148 L 8.392 -1.604 L 7.936 -1.148 L 7.909 -1.686 L 7.371 -1.148 L 6.805 -1.148 L 7.426 -1.769 L 6.943 -1.851 L 6.239 -1.148 L 5.765 -1.239 L 6.459 -1.934 L 5.976 -2.016 L 5.628 -1.668 L 5.628 -1.668 L 5.628 -1.668 L 5.628 -1.668' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:1.6' inkscape:groupmode='layer' inkscape:label='Layer 6, z:1.6' transform='translate(280.0, 652.353)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.6' fill='#000' stroke='none' y='15' >Layer 6, z:1.6</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.554 -1.266 L -12.389 -1.357 L -12.123 -1.453 L -4.935 -2.681 L -4.935 -0.455 L -11.5 -0.455 L -11.5 0.455 L -4.935 0.455 L -4.935 2.681 L -12.213 1.427 L -12.389 1.357 L -12.706 1.156 L -12.963 0.882 L -13.145 0.552 L -13.238 0.188 L -13.25 -0.0 L -13.203 -0.373 z M -1.244 0.455 L -1.072 0.779 L -0.845 1.021 L -0.564 1.199 L -0.248 1.302 L 0.083 1.322 L 0.409 1.26 L 0.71 1.119 L 0.966 0.907 L 1.072 0.779 L 1.244 0.455 L 4.025 0.455 L 4.025 2.836 L 0.188 3.488 L -0.094 3.497 L -4.025 2.836 L -4.025 0.455 z M 4.935 2.681 L 4.935 0.455 L 11.5 0.455 L 11.5 -0.455 L 4.935 -0.455 L 4.935 -2.681 L 12.123 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.389 1.357 L 12.123 1.453 z M 0.845 -1.021 L 0.564 -1.199 L 0.248 -1.302 L -0.083 -1.322 L -0.409 -1.26 L -0.71 -1.119 L -0.966 -0.907 L -1.161 -0.638 L -1.244 -0.455 L -4.025 -0.455 L -4.025 -2.836 L -0.188 -3.488 L 0.188 -3.488 L 4.025 -2.836 L 4.025 -0.455 L 1.244 -0.455 L 1.072 -0.779 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.837 -0.696 L -12.697 -0.889 L -12.441 -1.1 L -12.306 -1.174 L -12.072 -1.259 L -5.135 -2.444 L -5.135 -0.655 L -11.7 -0.655 L -11.7 0.655 L -5.135 0.655 L -5.135 2.444 L -12.158 1.233 L -12.298 1.178 L -12.577 1.001 L -12.8 0.763 L -12.958 0.478 L -13.04 0.157 L -13.049 0.006 L -13.008 -0.323 L -12.888 -0.626 L -12.837 -0.696 L -12.837 -0.696 L -12.837 -0.696 L -12.837 -0.696 M -3.825 1.174 L -3.825 0.935 L -3.825 0.655 L -1.364 0.655 L -1.236 0.896 L -0.973 1.176 L -0.65 1.381 L -0.286 1.5 L 0.096 1.523 L 0.471 1.452 L 0.818 1.289 L 1.108 1.049 L 1.239 0.891 L 1.364 0.655 L 3.825 0.655 L 3.825 2.667 L 0.168 3.289 L -0.08 3.296 L -3.825 2.667 L -3.825 1.174 L -3.825 1.174 L -3.825 1.174 L -3.825 1.174 M 5.135 1.521 L 5.135 1.282 L 5.135 0.655 L 11.7 0.655 L 11.7 -0.655 L 5.135 -0.655 L 5.135 -2.444 L 12.069 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.511 1.053 L 12.304 1.175 L 12.072 1.259 L 5.135 2.444 L 5.135 1.521 L 5.135 1.521 L 5.135 1.521 L 5.135 1.521 M 3.825 -1.174 L 3.825 -0.935 L 3.825 -0.655 L 1.364 -0.655 L 1.236 -0.896 L 0.973 -1.176 L 0.65 -1.381 L 0.286 -1.5 L -0.096 -1.523 L -0.471 -1.452 L -0.818 -1.289 L -1.113 -1.045 L -1.335 -0.739 L -1.373 -0.655 L -3.825 -0.655 L -3.825 -2.667 L -0.171 -3.288 L 0.171 -3.288 L 3.825 -2.667 L 3.825 -1.174 L 3.825 -1.174 L 3.825 -1.174 L 3.825 -1.174' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -5.415 -1.455 L -5.976 -2.016 L -6.459 -1.934 L -5.552 -1.026 L -6.026 -0.935 L -6.942 -1.851 L -7.425 -1.769 L -6.592 -0.935 L -7.158 -0.935 L -7.909 -1.686 L -8.392 -1.603 L -7.723 -0.935 L -8.289 -0.935 L -8.875 -1.521 L -9.358 -1.438 L -8.855 -0.935 L -9.42 -0.935 L -9.841 -1.356 L -9.986 -0.935 L -10.324 -1.273 L -10.552 -0.935 L -10.807 -1.191 L -11.117 -0.935 L -11.291 -1.108 L -11.683 -0.935 L -11.774 -1.026 L -11.98 -0.666 L -12.211 -0.898 L -12.527 -0.647 L -11.98 -0.101 L -11.98 0.465 L -12.724 -0.279 L -12.715 0.296 L -12.065 0.946 L -11.51 0.935 L -11.379 1.066 L -10.944 0.935 L -10.693 1.187 L -10.379 0.935 L -10.007 1.307 L -9.813 0.935 L -9.321 1.427 L -9.247 0.935 L -8.635 1.547 L -8.682 0.935 L -7.949 1.668 L -7.263 1.788 L -8.116 0.935 L -7.55 0.935 L -6.577 1.908 L -5.891 2.028 L -6.985 0.935 L -6.419 0.935 L -5.425 1.929 L -5.415 1.373 L -5.853 0.935 L -5.853 0.935 L -5.853 0.935 L -5.853 0.935 M -3.545 2.112 L -3.163 2.494 L -2.483 2.609 L -3.545 1.546 L -3.454 1.072 L -1.803 2.723 L -1.122 2.837 L -3.025 0.935 L -2.459 0.935 L -0.442 2.952 L 0.153 2.981 L -1.893 0.935 L -1.893 0.935 L -1.893 0.935 L -1.893 0.935 M -0.556 1.706 L 0.639 2.902 L 1.126 2.823 L 0.107 1.804 L 0.579 1.71 L 1.613 2.744 L 2.099 2.665 L 0.964 1.53 L 1.275 1.275 L 2.586 2.586 L 3.073 2.507 L 1.519 0.954 L 2.066 0.935 L 3.545 2.414 L 3.545 1.848 L 2.632 0.935 L 3.198 0.935 L 3.545 1.282 L 3.545 1.282 L 3.545 1.282 L 3.545 1.282 M 5.415 1.455 L 5.976 2.016 L 6.459 1.934 L 5.552 1.026 L 6.026 0.935 L 6.942 1.851 L 7.425 1.769 L 6.592 0.935 L 7.158 0.935 L 7.909 1.686 L 8.392 1.603 L 7.723 0.935 L 8.289 0.935 L 8.875 1.521 L 9.358 1.438 L 8.855 0.935 L 9.42 0.935 L 9.841 1.356 L 9.986 0.935 L 10.324 1.273 L 10.552 0.935 L 10.807 1.191 L 11.117 0.935 L 11.291 1.108 L 11.683 0.935 L 11.774 1.026 L 11.98 0.666 L 12.216 0.902 L 12.53 0.651 L 11.98 0.101 L 11.98 -0.465 L 12.72 0.275 L 12.722 -0.289 L 12.042 -0.969 L 11.51 -0.935 L 11.346 -1.099 L 10.944 -0.935 L 10.664 -1.215 L 10.379 -0.935 L 9.982 -1.332 L 9.813 -0.935 L 9.3 -1.448 L 9.247 -0.935 L 8.617 -1.565 L 8.682 -0.935 L 7.935 -1.681 L 7.253 -1.798 L 8.116 -0.935 L 7.55 -0.935 L 6.571 -1.915 L 5.888 -2.031 L 6.985 -0.935 L 6.419 -0.935 L 5.424 -1.93 L 5.415 -1.373 L 5.853 -0.935 L 5.853 -0.935 L 5.853 -0.935 L 5.853 -0.935 M -3.198 -0.935 L -3.545 -1.282 L -3.545 -1.848 L -2.632 -0.935 L -2.066 -0.935 L -3.545 -2.414 L -3.076 -2.51 L -1.548 -0.983 L -1.275 -1.275 L -2.593 -2.593 L -2.109 -2.675 L -0.964 -1.53 L -0.579 -1.71 L -1.625 -2.757 L -1.142 -2.839 L -0.107 -1.804 L 0.556 -1.706 L -0.658 -2.921 L -0.175 -3.003 L 1.893 -0.935 L 2.459 -0.935 L 0.435 -2.959 L 1.116 -2.843 L 3.025 -0.935 L 3.454 -1.072 L 1.798 -2.728 L 2.479 -2.612 L 3.545 -1.546 L 3.545 -2.112 L 3.161 -2.496 L 3.161 -2.496 L 3.161 -2.496 L 3.161 -2.496' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:1.8' inkscape:groupmode='layer' inkscape:label='Layer 7, z:1.8' transform='translate(280.0, 740.189)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate1.8' fill='#000' stroke='none' y='15' >Layer 7, z:1.8</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.546 -1.272 L -12.129 -1.452 L 0.0 -3.5 L 12.123 -1.453 L 12.473 -1.314 L 12.777 -1.093 L 13.017 -0.804 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.628 1.218 L 12.249 1.43 L 12.038 1.149 L 11.875 1.029 L 11.769 1.0 L 11.668 1.013 L 11.572 1.067 L 11.443 1.222 L 11.294 1.599 L 0.094 3.497 L -0.188 3.488 L -11.294 1.599 L -11.368 1.373 L -11.484 1.16 L -11.572 1.067 L -11.668 1.013 L -11.769 1.0 L -11.875 1.029 L -11.984 1.099 L -12.147 1.278 L -12.38 1.361 L -12.706 1.156 L -12.963 0.882 L -13.145 0.552 L -13.238 0.188 L -13.25 -0.0 L -13.203 -0.373 z M -0.906 0.965 L -0.637 1.16 L -0.33 1.282 L 0.0 1.324 L 0.33 1.282 L 0.637 1.16 L 0.906 0.965 L 1.118 0.708 L 1.259 0.409 L 1.321 0.082 L 1.301 -0.248 L 1.198 -0.563 L 1.021 -0.842 L 0.778 -1.071 L 0.488 -1.231 L 0.166 -1.314 L -0.166 -1.314 L -0.488 -1.231 L -0.778 -1.071 L -1.021 -0.842 L -1.197 -0.566 L -1.299 -0.254 L -1.321 0.083 L -1.259 0.409 L -1.118 0.708 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -1.513 -0.037 L -1.522 0.095 L -1.45 0.471 L -1.288 0.816 L -1.044 1.112 L -0.735 1.337 L -0.38 1.477 L 0.0 1.525 L 0.38 1.477 L 0.735 1.337 L 1.044 1.112 L 1.288 0.816 L 1.45 0.471 L 1.522 0.095 L 1.499 -0.285 L 1.381 -0.649 L 1.176 -0.971 L 0.897 -1.234 L 0.562 -1.418 L 0.191 -1.514 L -0.191 -1.514 L -0.562 -1.418 L -0.897 -1.234 L -1.176 -0.971 L -1.379 -0.652 L -1.497 -0.292 L -1.513 -0.037 L -1.513 -0.037 L -1.513 -0.037 L -1.513 -0.037' fill='none' stroke='#fa0' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.5 -1.051 L -12.441 -1.1 L -12.072 -1.259 L 0.0 -3.297 L 12.069 -1.259 L 12.376 -1.137 L 12.639 -0.946 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.509 1.055 L 12.304 1.17 L 12.18 1.005 L 11.964 0.846 L 11.783 0.797 L 11.604 0.82 L 11.442 0.911 L 11.269 1.119 L 11.149 1.421 L 0.08 3.296 L -0.168 3.289 L -11.141 1.422 L -11.184 1.293 L -11.321 1.041 L -11.448 0.908 L -11.604 0.82 L -11.783 0.797 L -11.957 0.844 L -12.114 0.945 L -12.261 1.106 L -12.356 1.14 L -12.578 1.0 L -12.8 0.763 L -12.958 0.478 L -13.04 0.157 L -13.049 0.006 L -13.008 -0.323 L -12.888 -0.626 L -12.697 -0.889 L -12.5 -1.051 L -12.5 -1.051 L -12.5 -1.051 L -12.5 -1.051' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M 2.578 -2.578 L 1.268 -1.268 L 0.956 -1.521 L 2.094 -2.66 L 1.61 -2.741 L 0.573 -1.705 L 0.097 -1.794 L 1.126 -2.823 L 0.642 -2.905 L -0.553 -1.71 L -0.553 -1.71 L -0.553 -1.71 L -0.553 -1.71 M 1.519 -0.953 L 3.062 -2.496 L 3.546 -2.414 L 1.701 -0.57 L 1.791 -0.094 L 4.03 -2.333 L 4.514 -2.251 L 1.723 0.54 L -0.175 3.003 L 4.998 -2.169 L 5.482 -2.088 L 0.443 2.951 L 1.124 2.836 L 5.966 -2.006 L 6.45 -1.924 L 1.805 2.72 L 2.486 2.605 L 6.934 -1.842 L 7.418 -1.761 L 3.168 2.489 L 3.849 2.374 L 7.902 -1.679 L 8.386 -1.597 L 4.53 2.258 L 5.211 2.143 L 8.869 -1.516 L 9.353 -1.434 L 5.892 2.028 L 6.573 1.912 L 9.837 -1.352 L 10.321 -1.27 L 7.254 1.797 L 7.935 1.681 L 10.805 -1.189 L 11.289 -1.107 L 8.616 1.566 L 9.298 1.45 L 11.773 -1.025 L 12.214 -0.9 L 9.979 1.335 L 10.66 1.22 L 12.525 -0.645 L 12.724 -0.279 L 11.905 0.54 L 12.28 0.731 L 12.713 0.298 L 12.713 0.298 L 12.713 0.298 L 12.713 0.298 M -12.046 -0.965 L -12.719 -0.292 L -12.72 0.275 L -11.348 -1.097 L -10.667 -1.212 L -12.526 0.646 L -11.834 0.52 L -9.987 -1.327 L -9.306 -1.442 L -11.375 0.627 L -11.08 0.898 L -8.626 -1.557 L -7.945 -1.672 L -10.784 1.167 L -10.327 1.277 L -7.264 -1.787 L -6.584 -1.902 L -9.844 1.359 L -9.361 1.441 L -5.903 -2.016 L -5.223 -2.131 L -8.877 1.523 L -8.394 1.605 L -4.542 -2.246 L -3.861 -2.361 L -7.91 1.688 L -7.427 1.77 L -3.181 -2.476 L -2.5 -2.591 L -6.943 1.852 L -6.46 1.934 L -1.82 -2.706 L -1.139 -2.821 L -5.976 2.017 L -5.493 2.099 L -0.458 -2.936 L 0.158 -2.987 L -5.009 2.181 L -4.526 2.263 L -1.705 -0.558 L -1.804 0.106 L -4.043 2.345 L -3.559 2.428 L -1.71 0.578 L -1.529 0.963 L -3.076 2.51 L -2.592 2.592 L -1.274 1.274 L -0.956 1.522 L -2.109 2.674 L -1.625 2.757 L -0.571 1.703 L -0.098 1.795 L -1.142 2.839 L -0.658 2.921 L 0.553 1.71 L 0.553 1.71 L 0.553 1.71 L 0.553 1.71' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:2.0' inkscape:groupmode='layer' inkscape:label='Layer 8, z:2.0' transform='translate(280.0, 828.025)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate2.0' fill='#000' stroke='none' y='15' >Layer 8, z:2.0</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.546 -1.272 L -12.129 -1.452 L -1.896 -3.199 L -1.896 3.199 L -11.114 1.629 L -11.201 1.055 L -11.293 0.762 L -11.409 0.549 L -11.497 0.456 L -11.593 0.402 L -11.694 0.39 L -11.8 0.418 L -11.909 0.488 L -12.069 0.664 L -12.334 1.139 L -12.632 1.214 L -12.906 0.956 L -13.107 0.639 L -13.223 0.281 L -13.25 -0.0 L -13.203 -0.373 z M 12.018 0.597 L 11.854 0.448 L 11.747 0.399 L 11.643 0.391 L 11.544 0.424 L 11.452 0.498 L 11.329 0.682 L 11.201 1.055 L 11.114 1.629 L 1.896 3.199 L 1.896 -3.199 L 12.123 -1.453 L 12.389 -1.357 L 12.554 -1.266 L 12.844 -1.027 L 13.065 -0.723 L 13.203 -0.373 L 13.25 0.0 L 13.203 0.373 L 13.065 0.723 L 12.844 1.027 L 12.554 1.266 L 12.284 1.032 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.726 -0.848 L -12.697 -0.889 L -12.441 -1.1 L -12.072 -1.259 L -2.096 -2.962 L -2.096 2.962 L -10.938 1.456 L -11.006 1.01 L -11.108 0.683 L -11.246 0.43 L -11.373 0.297 L -11.53 0.208 L -11.708 0.187 L -11.882 0.233 L -12.039 0.334 L -12.233 0.546 L -12.467 0.966 L -12.575 0.993 L -12.751 0.828 L -12.925 0.553 L -13.026 0.24 L -13.049 0.003 L -13.008 -0.323 L -12.888 -0.626 L -12.726 -0.848 L -12.726 -0.848 L -12.726 -0.848 L -12.726 -0.848 M 2.096 1.386 L 2.096 1.336 L 2.096 -2.962 L 12.072 -1.259 L 12.306 -1.174 L 12.441 -1.1 L 12.697 -0.889 L 12.888 -0.626 L 13.008 -0.323 L 13.048 0.0 L 13.008 0.323 L 12.888 0.626 L 12.697 0.889 L 12.557 1.004 L 12.438 0.901 L 12.174 0.468 L 11.966 0.279 L 11.798 0.202 L 11.618 0.188 L 11.447 0.246 L 11.303 0.361 L 11.148 0.592 L 11.006 1.007 L 10.938 1.456 L 2.096 2.962 L 2.096 1.386 L 2.096 1.386 L 2.096 1.386 L 2.096 1.386' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -11.925 -0.045 L -12.527 -0.647 L -12.724 -0.279 L -12.272 0.173 L -12.521 0.489 L -12.713 0.298 L -12.713 0.298 L -12.713 0.298 L -12.713 0.298 M -2.593 -2.593 L -2.376 -2.376 L -2.376 -1.81 L -3.076 -2.511 L -3.559 -2.428 L -2.376 -1.245 L -2.376 -0.679 L -4.043 -2.346 L -4.526 -2.263 L -2.376 -0.113 L -2.376 0.452 L -5.009 -2.181 L -5.492 -2.098 L -2.376 1.018 L -2.376 1.584 L -5.975 -2.016 L -6.459 -1.933 L -2.376 2.149 L -2.525 2.566 L -6.942 -1.851 L -7.425 -1.768 L -3.16 2.497 L -3.842 2.381 L -7.908 -1.686 L -8.391 -1.603 L -4.524 2.265 L -5.205 2.148 L -8.875 -1.521 L -9.358 -1.438 L -5.887 2.032 L -6.569 1.916 L -9.841 -1.356 L -10.324 -1.273 L -7.251 1.8 L -7.933 1.684 L -10.807 -1.191 L -11.291 -1.108 L -8.615 1.568 L -9.296 1.452 L -11.774 -1.026 L -12.209 -0.895 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 M 2.376 0.113 L 4.527 2.264 L 4.043 2.346 L 2.376 0.679 L 2.376 1.245 L 3.56 2.429 L 3.077 2.511 L 2.376 1.81 L 2.376 2.376 L 2.593 2.593 L 2.593 2.593 L 2.593 2.593 L 2.593 2.593 M 5.01 2.182 L 2.376 -0.452 L 2.376 -1.018 L 5.493 2.099 L 5.977 2.017 L 2.376 -1.584 L 2.376 -2.149 L 6.46 1.935 L 6.944 1.852 L 2.525 -2.566 L 3.161 -2.496 L 7.427 1.77 L 7.91 1.688 L 3.843 -2.38 L 4.525 -2.263 L 8.394 1.605 L 8.877 1.523 L 5.207 -2.147 L 5.889 -2.03 L 9.36 1.441 L 9.844 1.358 L 6.571 -1.914 L 7.254 -1.797 L 10.327 1.276 L 10.698 1.081 L 7.936 -1.681 L 8.618 -1.564 L 10.838 0.656 L 11.023 0.275 L 9.3 -1.448 L 9.982 -1.332 L 11.31 -0.004 L 11.801 -0.078 L 10.664 -1.215 L 11.346 -1.099 L 12.724 0.279 L 12.719 -0.292 L 12.041 -0.97 L 12.041 -0.97 L 12.041 -0.97 L 12.041 -0.97' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:2.2' inkscape:groupmode='layer' inkscape:label='Layer 9, z:2.2' transform='translate(280.0, 915.861)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate2.2' fill='#000' stroke='none' y='15' >Layer 9, z:2.2</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.546 -1.272 L -12.129 -1.452 L -3.405 -2.942 L -3.405 2.942 L -11.009 1.647 L -11.102 0.554 L -11.218 0.151 L -11.293 0.0 L -11.377 -0.113 L -11.469 -0.187 L -11.568 -0.22 L -11.672 -0.212 L -11.779 -0.163 L -11.888 -0.073 L -11.997 0.056 L -12.308 0.652 L -12.409 0.972 L -12.706 1.156 L -12.963 0.882 L -13.145 0.552 L -13.238 0.188 L -13.25 -0.0 L -13.203 -0.373 z M 3.405 -2.942 L 12.302 -1.395 L 12.632 -1.214 L 12.906 -0.956 L 13.107 -0.639 L 13.223 -0.281 L 13.247 0.094 L 13.177 0.464 L 13.017 0.804 L 12.777 1.093 L 12.446 1.037 L 12.103 0.219 L 11.888 -0.073 L 11.779 -0.163 L 11.619 -0.221 L 11.518 -0.209 L 11.377 -0.113 L 11.293 0.0 L 11.218 0.151 L 11.061 0.805 L 11.02 1.645 L 3.405 2.942 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.899 -0.597 L -12.888 -0.626 L -12.697 -0.889 L -12.441 -1.1 L -12.072 -1.259 L -3.605 -2.705 L -3.605 2.705 L -10.823 1.476 L -10.904 0.518 L -11.031 0.078 L -11.122 -0.105 L -11.232 -0.253 L -11.372 -0.365 L -11.543 -0.423 L -11.723 -0.409 L -11.886 -0.334 L -12.029 -0.216 L -12.164 -0.056 L -12.493 0.575 L -12.577 0.841 L -12.672 0.9 L -12.8 0.763 L -12.958 0.478 L -13.04 0.157 L -13.049 0.006 L -13.008 -0.323 L -12.899 -0.597 L -12.899 -0.597 L -12.899 -0.597 L -12.899 -0.597 M 3.605 0.603 L 3.605 0.247 L 3.605 -2.704 L 12.235 -1.204 L 12.513 -1.051 L 12.751 -0.828 L 12.925 -0.553 L 13.025 -0.243 L 13.046 0.082 L 12.985 0.402 L 12.847 0.696 L 12.697 0.877 L 12.588 0.858 L 12.279 0.12 L 12.034 -0.212 L 11.88 -0.339 L 11.643 -0.425 L 11.446 -0.402 L 11.237 -0.259 L 11.122 -0.105 L 11.029 0.082 L 10.862 0.777 L 10.828 1.475 L 3.605 2.705 L 3.605 0.603 L 3.605 0.603 L 3.605 0.603 L 3.605 0.603' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -3.885 1.622 L -4.527 2.264 L -5.01 2.182 L -3.885 1.057 L -3.885 0.491 L -5.494 2.099 L -5.977 2.017 L -3.885 -0.075 L -3.885 -0.64 L -6.46 1.935 L -6.944 1.852 L -3.885 -1.206 L -3.885 -1.772 L -7.427 1.77 L -7.91 1.688 L -3.969 -2.254 L -4.524 -2.264 L -8.394 1.605 L -8.877 1.523 L -5.207 -2.147 L -5.889 -2.031 L -9.36 1.441 L -9.844 1.359 L -6.571 -1.914 L -7.253 -1.798 L -10.327 1.276 L -10.585 0.968 L -7.935 -1.681 L -8.618 -1.565 L -10.632 0.45 L -10.759 0.011 L -9.3 -1.448 L -9.982 -1.332 L -10.959 -0.355 L -11.257 -0.622 L -10.664 -1.215 L -11.346 -1.099 L -11.758 -0.687 L -12.046 -0.965 L -12.719 -0.292 L -12.579 0.134 L -12.692 0.247 L -12.692 0.247 L -12.692 0.247 L -12.692 0.247 M 3.885 0.075 L 5.969 -2.009 L 5.487 -2.093 L 3.885 -0.491 L 3.885 -1.057 L 5.005 -2.177 L 4.523 -2.26 L 3.885 -1.622 L 3.885 -1.622 L 3.885 -1.622 L 3.885 -1.622 M 3.885 0.64 L 6.451 -1.925 L 6.933 -1.841 L 3.885 1.206 L 3.885 1.772 L 7.414 -1.758 L 7.896 -1.674 L 3.969 2.254 L 4.524 2.265 L 8.378 -1.59 L 8.86 -1.506 L 5.205 2.148 L 5.887 2.032 L 9.342 -1.422 L 9.824 -1.339 L 6.569 1.916 L 7.251 1.8 L 10.306 -1.255 L 10.788 -1.171 L 7.933 1.684 L 8.615 1.568 L 11.27 -1.087 L 11.43 -0.682 L 11.752 -1.004 L 11.932 -0.618 L 12.211 -0.897 L 12.53 -0.651 L 12.259 -0.379 L 12.498 -0.053 L 12.72 -0.275 L 12.72 -0.275 L 12.72 -0.275 L 12.72 -0.275 M 10.766 -0.018 L 9.296 1.452 L 9.978 1.336 L 10.586 0.728 L 10.586 0.728 L 10.586 0.728 L 10.586 0.728' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:2.4' inkscape:groupmode='layer' inkscape:label='Layer 10, z:2.4' transform='translate(280.0, 1003.697)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate2.4' fill='#000' stroke='none' y='15' >Layer 10, z:2.4</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.546 -1.272 L -12.129 -1.452 L -4.4 -2.772 L -4.4 2.772 L -10.98 1.652 L -10.946 1.072 L -11.005 0.067 L -11.109 -0.371 L -11.218 -0.611 L -11.302 -0.724 L -11.394 -0.798 L -11.493 -0.831 L -11.597 -0.823 L -11.704 -0.774 L -11.813 -0.684 L -11.976 -0.477 L -12.183 -0.08 L -12.495 0.925 L -12.844 1.027 L -13.065 0.723 L -13.203 0.373 L -13.25 0.0 L -13.203 -0.373 z M 4.4 -2.772 L 12.123 -1.453 L 12.389 -1.357 L 12.554 -1.266 L 12.844 -1.027 L 13.065 -0.723 L 13.203 -0.373 L 13.25 0.0 L 13.203 0.373 L 13.065 0.723 L 12.844 1.027 L 12.485 0.922 L 12.409 0.582 L 12.134 -0.19 L 11.922 -0.555 L 11.813 -0.684 L 11.704 -0.774 L 11.597 -0.823 L 11.493 -0.831 L 11.394 -0.798 L 11.302 -0.724 L 11.218 -0.611 L 11.143 -0.46 L 11.026 -0.054 L 10.947 0.721 L 10.98 1.652 L 4.4 2.772 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.59 -0.977 L -12.441 -1.1 L -12.072 -1.259 L -4.6 -2.535 L -4.6 2.535 L -10.77 1.485 L -10.746 1.072 L -10.806 0.038 L -10.919 -0.436 L -11.045 -0.713 L -11.157 -0.864 L -11.297 -0.976 L -11.468 -1.034 L -11.648 -1.02 L -11.811 -0.945 L -11.957 -0.825 L -12.145 -0.586 L -12.368 -0.157 L -12.654 0.763 L -12.765 0.796 L -12.888 0.626 L -13.008 0.323 L -13.048 0.0 L -13.008 -0.323 L -12.888 -0.626 L -12.697 -0.889 L -12.59 -0.977 L -12.59 -0.977 L -12.59 -0.977 L -12.59 -0.977 M 4.6 1.197 L 4.6 -2.535 L 12.072 -1.259 L 12.306 -1.174 L 12.441 -1.1 L 12.697 -0.889 L 12.888 -0.626 L 13.008 -0.323 L 13.048 0.0 L 13.008 0.323 L 12.888 0.626 L 12.765 0.796 L 12.654 0.763 L 12.602 0.527 L 12.316 -0.274 L 12.086 -0.671 L 11.954 -0.827 L 11.811 -0.945 L 11.648 -1.02 L 11.468 -1.034 L 11.297 -0.976 L 11.157 -0.864 L 11.047 -0.716 L 10.956 -0.533 L 10.829 -0.092 L 10.747 0.714 L 10.774 1.484 L 4.6 2.535 L 4.6 1.336 L 4.6 1.197 L 4.6 1.197 L 4.6 1.197 L 4.6 1.197' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.648 -0.202 L -12.724 -0.279 L -12.462 -0.582 L -12.527 -0.647 L -12.527 -0.647 L -12.527 -0.647 L -12.527 -0.647 M -5.493 -2.098 L -4.88 -1.486 L -4.88 -0.92 L -5.976 -2.016 L -6.459 -1.933 L -4.88 -0.355 L -4.88 0.211 L -6.942 -1.851 L -7.425 -1.768 L -4.88 0.777 L -4.88 1.343 L -7.908 -1.686 L -8.392 -1.603 L -4.88 1.908 L -5.206 2.148 L -8.875 -1.521 L -9.358 -1.438 L -5.888 2.032 L -6.569 1.916 L -9.841 -1.356 L -10.324 -1.273 L -7.251 1.8 L -7.933 1.684 L -10.807 -1.191 L -10.635 -0.453 L -8.615 1.568 L -9.296 1.452 L -10.516 0.232 L -10.485 0.828 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 M 4.88 -0.777 L 7.427 1.77 L 6.943 1.852 L 4.88 -0.211 L 4.88 0.355 L 6.46 1.934 L 5.977 2.017 L 4.88 0.92 L 4.88 1.486 L 5.493 2.099 L 5.493 2.099 L 5.493 2.099 L 5.493 2.099 M 7.91 1.688 L 4.88 -1.343 L 4.88 -1.908 L 8.394 1.605 L 8.877 1.523 L 5.207 -2.147 L 5.889 -2.031 L 9.36 1.441 L 9.844 1.358 L 6.571 -1.914 L 7.253 -1.798 L 10.327 1.276 L 10.471 0.855 L 7.935 -1.681 L 8.618 -1.565 L 10.505 0.323 L 10.564 -0.184 L 9.3 -1.448 L 9.982 -1.332 L 10.69 -0.623 L 10.896 -0.983 L 10.664 -1.215 L 10.664 -1.215 L 10.664 -1.215 L 10.664 -1.215 M 12.507 -0.504 L 12.719 -0.292 L 12.719 -0.292 L 12.719 -0.292 L 12.719 -0.292' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:2.6' inkscape:groupmode='layer' inkscape:label='Layer 11, z:2.6' transform='translate(280.0, 1091.533)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate2.6' fill='#000' stroke='none' y='15' >Layer 11, z:2.6</text>
+			<path d='M -12.963 -0.882 L -12.706 -1.156 L -12.389 -1.357 L -12.123 -1.453 L -11.841 -1.174 L -12.059 -0.801 L -12.205 -0.444 L -12.443 0.428 L -12.514 0.901 L -12.927 0.952 L -13.176 0.468 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M -5.22 -2.633 L -5.22 2.633 L -10.986 1.651 L -10.876 0.621 L -10.911 -0.417 L -11.004 -0.882 L -11.214 -1.361 L -11.08 -1.631 z M 5.22 -2.633 L 11.08 -1.631 L 11.269 -1.374 L 11.138 -1.213 L 11.028 -0.961 L 10.905 -0.363 L 10.869 0.24 L 10.894 0.91 L 10.986 1.651 L 5.22 2.633 z M 12.706 -1.156 L 12.963 -0.882 L 13.145 -0.552 L 13.238 -0.188 L 13.238 0.188 L 13.144 0.554 L 12.868 1.031 L 12.522 0.904 L 12.292 -0.176 L 12.109 -0.689 L 11.917 -1.057 L 11.716 -1.183 L 11.849 -1.593 L 12.168 -1.437 L 12.389 -1.357 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.691 -0.879 L -12.577 -1.001 L -12.3 -1.176 L -12.174 -1.222 L -12.092 -1.141 L -12.239 -0.89 L -12.395 -0.508 L -12.639 0.387 L -12.689 0.721 L -12.813 0.737 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.691 -0.879 L -12.691 -0.879 L -12.691 -0.879 L -12.691 -0.879 M -10.926 -1.203 L -10.993 -1.356 L -10.946 -1.451 L -5.42 -2.396 L -5.42 2.396 L -10.767 1.485 L -10.676 0.628 L -10.712 -0.44 L -10.812 -0.942 L -10.926 -1.203 L -10.926 -1.203 L -10.926 -1.203 L -10.926 -1.203 M 5.42 -1.165 L 5.42 -1.332 L 5.42 -2.396 L 10.967 -1.448 L 11.016 -1.38 L 10.966 -1.318 L 10.836 -1.022 L 10.706 -0.389 L 10.669 0.238 L 10.694 0.926 L 10.764 1.486 L 5.42 2.396 L 5.42 -1.165 L 5.42 -1.165 L 5.42 -1.165 L 5.42 -1.165 M 12.817 0.72 L 12.779 0.786 L 12.694 0.754 L 12.485 -0.231 L 12.293 -0.769 L 12.07 -1.197 L 11.934 -1.282 L 11.945 -1.354 L 12.072 -1.259 L 12.3 -1.176 L 12.577 -1.001 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.817 0.72 L 12.817 0.72 L 12.817 0.72 L 12.817 0.72' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -5.7 1.74 L -5.977 2.017 L -6.46 1.935 L -5.7 1.175 L -5.7 0.609 L -6.944 1.853 L -7.427 1.77 L -5.7 0.043 L -5.7 -0.523 L -7.91 1.688 L -8.394 1.606 L -5.7 -1.088 L -5.7 -1.654 L -8.877 1.523 L -9.361 1.441 L -5.888 -2.032 L -6.57 -1.915 L -9.844 1.359 L -10.276 1.225 L -7.252 -1.799 L -7.935 -1.682 L -10.412 0.795 L -10.409 0.227 L -8.617 -1.565 L -9.3 -1.448 L -10.427 -0.321 L -10.501 -0.813 L -9.982 -1.332 L -9.982 -1.332 L -9.982 -1.332 L -9.982 -1.332 M 5.7 -1.175 L 6.46 -1.934 L 5.976 -2.017 L 5.7 -1.74 L 5.7 -1.74 L 5.7 -1.74 L 5.7 -1.74 M 5.7 -0.609 L 6.943 -1.851 L 7.426 -1.769 L 5.7 -0.043 L 5.7 0.523 L 7.909 -1.686 L 8.392 -1.604 L 5.7 1.088 L 5.7 1.654 L 8.875 -1.521 L 9.358 -1.438 L 5.887 2.032 L 6.569 1.916 L 9.841 -1.356 L 10.324 -1.273 L 7.251 1.8 L 7.933 1.684 L 10.534 -0.918 L 10.416 -0.234 L 8.614 1.568 L 9.296 1.452 L 10.395 0.353 L 10.423 0.891 L 9.978 1.336 L 9.978 1.336 L 9.978 1.336 L 9.978 1.336' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:2.8' inkscape:groupmode='layer' inkscape:label='Layer 12, z:2.8' transform='translate(280.0, 1179.369)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate2.8' fill='#000' stroke='none' y='15' >Layer 12, z:2.8</text>
+			<path d='M -13.065 -0.723 L -12.843 -1.028 L -12.411 -1.378 L -12.13 -1.054 L -12.427 0.138 L -12.5 0.921 L -12.844 1.027 L -13.065 0.723 L -13.203 0.373 L -13.25 0.0 L -13.203 -0.373 z M -10.912 -1.478 L -10.627 -1.712 L -5.909 -2.516 L -5.909 2.516 L -11.036 1.643 L -10.855 0.664 L -10.795 -0.458 z M 5.909 -2.516 L 10.982 -1.652 L 10.836 -1.028 L 10.795 -0.46 L 10.809 0.172 L 10.877 0.828 L 11.036 1.643 L 5.909 2.516 z M 12.218 -0.784 L 12.088 -1.12 L 12.389 -1.357 L 12.706 -1.156 L 12.963 -0.882 L 13.145 -0.552 L 13.238 -0.188 L 13.238 0.188 L 13.144 0.555 L 12.866 1.028 L 12.496 0.921 L 12.399 -0.024 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.942 -0.489 L -12.888 -0.626 L -12.697 -0.889 L -12.435 -1.101 L -12.349 -1.002 L -12.625 0.104 L -12.686 0.769 L -12.766 0.794 L -12.888 0.626 L -13.008 0.323 L -13.048 0.0 L -13.008 -0.323 L -12.942 -0.489 L -12.942 -0.489 L -12.942 -0.489 L -12.942 -0.489 M -10.616 -0.654 L -10.67 -1.123 L -10.701 -1.393 L -10.541 -1.524 L -6.109 -2.279 L -6.109 2.279 L -10.802 1.48 L -10.656 0.688 L -10.594 -0.465 L -10.616 -0.654 L -10.616 -0.654 L -10.616 -0.654 L -10.616 -0.654 M 6.109 1.375 L 6.109 0.903 L 6.109 -2.279 L 10.739 -1.491 L 10.638 -1.058 L 10.595 -0.465 L 10.609 0.185 L 10.679 0.858 L 10.8 1.48 L 6.109 2.279 L 6.109 1.375 L 6.109 1.375 L 6.109 1.375 L 6.109 1.375 M 12.466 -0.603 L 12.409 -0.843 L 12.328 -1.054 L 12.402 -1.112 L 12.577 -1.001 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.772 0.793 L 12.681 0.766 L 12.597 -0.058 L 12.466 -0.603 L 12.466 -0.603 L 12.466 -0.603 L 12.466 -0.603' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -6.944 -1.853 L -6.389 -1.298 L -6.389 -0.732 L -7.427 -1.77 L -7.911 -1.688 L -6.389 -0.166 L -6.389 0.399 L -8.394 -1.606 L -8.877 -1.523 L -6.389 0.965 L -6.389 1.531 L -9.361 -1.441 L -9.844 -1.359 L -6.573 1.912 L -7.25 1.801 L -10.327 -1.276 L -10.343 -0.726 L -7.932 1.685 L -8.614 1.569 L -10.331 -0.149 L -10.36 0.388 L -9.296 1.452 L -9.977 1.336 L -10.411 0.903 L -10.411 0.903 L -10.411 0.903 L -10.411 0.903 M 6.389 1.298 L 6.944 1.853 L 7.427 1.771 L 6.389 0.732 L 6.389 0.166 L 7.911 1.688 L 8.394 1.606 L 6.389 -0.399 L 6.389 -0.965 L 8.878 1.524 L 9.361 1.441 L 6.389 -1.531 L 6.573 -1.912 L 9.844 1.359 L 10.3 1.249 L 7.25 -1.801 L 7.932 -1.685 L 10.401 0.785 L 10.331 0.148 L 8.614 -1.568 L 9.296 -1.452 L 10.342 -0.406 L 10.353 -0.96 L 9.978 -1.336 L 9.978 -1.336 L 9.978 -1.336 L 9.978 -1.336' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:3.0' inkscape:groupmode='layer' inkscape:label='Layer 13, z:3.0' transform='translate(280.0, 1267.205)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate3.0' fill='#000' stroke='none' y='15' >Layer 13, z:3.0</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.554 -1.266 L -12.21 -1.204 L -12.408 -0.061 L -12.431 0.971 L -12.834 1.019 L -12.963 0.882 L -13.145 0.552 L -13.238 0.188 L -13.25 -0.0 L -13.203 -0.373 z M -6.517 -2.412 L -6.517 2.412 L -11.143 1.625 L -10.865 0.592 L -10.722 -0.713 L -10.768 -1.688 z M 6.517 -2.412 L 10.768 -1.688 L 10.719 -0.918 L 10.762 -0.112 L 10.855 0.542 L 11.143 1.625 L 6.517 2.412 z M 12.222 -1.128 L 12.547 -1.257 L 12.706 -1.156 L 12.963 -0.882 L 13.145 -0.552 L 13.238 -0.188 L 13.238 0.188 L 13.145 0.552 L 12.963 0.882 L 12.588 1.099 L 12.44 0.567 L 12.417 0.02 L 12.359 -0.323 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.68 -0.903 L -12.498 -1.053 L -12.441 -1.043 L -12.608 -0.081 L -12.627 0.793 L -12.758 0.808 L -12.958 0.478 L -13.04 0.157 L -13.049 0.006 L -13.008 -0.323 L -12.888 -0.626 L -12.697 -0.889 L -12.68 -0.903 L -12.68 -0.903 L -12.68 -0.903 L -12.68 -0.903 M -10.536 -1.015 L -10.56 -1.521 L -6.717 -2.175 L -6.717 2.175 L -10.893 1.465 L -10.668 0.629 L -10.521 -0.707 L -10.535 -0.993 L -10.536 -1.015 L -10.536 -1.015 L -10.536 -1.015 L -10.536 -1.015 M 6.717 -1.078 L 6.717 -2.175 L 10.557 -1.521 L 10.519 -0.919 L 10.563 -0.093 L 10.659 0.582 L 10.893 1.465 L 6.717 2.175 L 6.717 -1.056 L 6.717 -1.078 L 6.717 -1.078 L 6.717 -1.078 L 6.717 -1.078 M 12.654 0.896 L 12.616 -0.001 L 12.446 -1.002 L 12.526 -1.033 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.8 0.763 L 12.655 0.918 L 12.654 0.896 L 12.654 0.896 L 12.654 0.896 L 12.654 0.896' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -6.997 1.34 L -7.427 1.77 L -7.911 1.688 L -6.997 0.774 L -6.997 0.209 L -8.394 1.606 L -8.877 1.524 L -6.997 -0.357 L -6.997 -0.923 L -9.361 1.441 L -9.844 1.359 L -6.997 -1.488 L -7.251 -1.8 L -10.328 1.277 L -10.427 0.81 L -7.933 -1.684 L -8.614 -1.568 L -10.334 0.152 L -10.264 -0.484 L -9.296 -1.452 L -9.978 -1.336 L -10.258 -1.056 L -10.258 -1.056 L -10.258 -1.056 L -10.258 -1.056 M 6.997 -1.34 L 7.427 -1.77 L 7.91 -1.688 L 6.997 -0.774 L 6.997 -0.209 L 8.394 -1.605 L 8.877 -1.523 L 6.997 0.357 L 6.997 0.923 L 9.36 -1.441 L 9.844 -1.358 L 6.997 1.488 L 7.251 1.8 L 10.206 -1.155 L 10.265 -0.648 L 7.932 1.684 L 8.614 1.568 L 10.283 -0.1 L 10.35 0.398 L 9.296 1.452 L 9.977 1.336 L 10.445 0.869 L 10.445 0.869 L 10.445 0.869 L 10.445 0.869' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:3.2' inkscape:groupmode='layer' inkscape:label='Layer 14, z:3.2' transform='translate(280.0, 1355.042)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate3.2' fill='#000' stroke='none' y='15' >Layer 14, z:3.2</text>
+			<path d='M -13.015 -0.807 L -12.652 -1.214 L -12.264 -1.071 L -12.357 -0.428 L -12.385 0.214 L -12.339 0.961 L -12.575 1.295 L -12.963 0.882 L -13.15 0.543 L -13.247 0.1 L -13.247 -0.094 L -13.177 -0.464 z M -7.072 -2.317 L -7.072 2.317 L -10.988 1.651 L -11.195 1.319 L -10.96 0.691 L -10.811 0.09 L -10.687 -0.723 L -10.646 -1.709 z M 7.072 -2.317 L 10.646 -1.709 L 10.705 -0.558 L 10.811 0.09 L 10.96 0.691 L 11.199 1.328 L 10.988 1.651 L 7.072 2.317 z M 12.357 -0.428 L 12.264 -1.071 L 12.652 -1.214 L 13.015 -0.807 L 13.177 -0.464 L 13.247 -0.094 L 13.223 0.281 L 13.107 0.639 L 12.906 0.956 L 12.632 1.214 L 12.323 0.977 L 12.369 0.661 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.783 -0.768 L -12.594 -0.979 L -12.485 -0.939 L -12.556 -0.447 L -12.585 0.216 L -12.543 0.903 L -12.597 0.98 L -12.8 0.763 L -12.961 0.472 L -13.047 0.078 L -13.047 -0.075 L -12.985 -0.402 L -12.847 -0.696 L -12.783 -0.768 L -12.783 -0.768 L -12.783 -0.768 L -12.783 -0.768 M -10.531 -0.424 L -10.488 -0.704 L -10.453 -1.539 L -7.272 -2.08 L -7.272 2.08 L -10.866 1.469 L -10.973 1.297 L -10.769 0.75 L -10.615 0.129 L -10.531 -0.424 L -10.531 -0.424 L -10.531 -0.424 L -10.531 -0.424 M 7.272 -1.404 L 7.272 -1.688 L 7.272 -2.08 L 10.454 -1.539 L 10.506 -0.537 L 10.615 0.13 L 10.769 0.75 L 10.976 1.303 L 10.868 1.469 L 7.272 2.08 L 7.272 -1.404 L 7.272 -1.404 L 7.272 -1.404 L 7.272 -1.404 M 12.751 0.828 L 12.619 0.952 L 12.538 0.889 L 12.569 0.674 L 12.557 -0.443 L 12.485 -0.939 L 12.594 -0.979 L 12.847 -0.696 L 12.985 -0.402 L 13.046 -0.082 L 13.025 0.243 L 12.925 0.553 L 12.751 0.828 L 12.751 0.828 L 12.751 0.828 L 12.751 0.828 L 12.751 0.828' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -10.189 -1.138 L -7.552 1.499 L -7.933 1.684 L -10.22 -0.603 L -10.295 -0.112 L -8.615 1.568 L -9.296 1.452 L -10.384 0.364 L -10.497 0.817 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 L -9.978 1.336 M -7.552 0.933 L -9.844 -1.359 L -9.36 -1.441 L -7.552 0.368 L -7.552 -0.198 L -8.877 -1.523 L -8.394 -1.605 L -7.552 -0.764 L -7.552 -1.329 L -7.91 -1.688 L -7.91 -1.688 L -7.91 -1.688 L -7.91 -1.688 M 7.552 -1.499 L 10.327 1.276 L 10.552 0.935 L 7.933 -1.684 L 8.615 -1.568 L 10.335 0.153 L 10.226 -0.522 L 9.296 -1.452 L 9.978 -1.336 L 10.196 -1.118 L 10.196 -1.118 L 10.196 -1.118 L 10.196 -1.118 M 9.844 1.359 L 7.552 -0.933 L 7.552 -0.368 L 9.36 1.441 L 8.877 1.523 L 7.552 0.198 L 7.552 0.764 L 8.394 1.605 L 7.91 1.688 L 7.552 1.329 L 7.552 1.329 L 7.552 1.329 L 7.552 1.329' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:3.4' inkscape:groupmode='layer' inkscape:label='Layer 15, z:3.4' transform='translate(280.0, 1442.878)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate3.4' fill='#000' stroke='none' y='15' >Layer 15, z:3.4</text>
+			<path d='M -12.962 -0.884 L -12.577 -1.277 L -12.282 -1.071 L -12.283 0.192 L -12.202 0.685 L -12.036 1.129 L -12.323 1.408 L -12.775 1.095 L -13.017 0.804 L -13.177 0.464 L -13.247 0.094 L -13.238 -0.188 L -13.145 -0.552 z M -11.17 0.809 L -10.928 0.218 L -10.671 -0.882 L -10.581 -1.72 L -7.583 -2.231 L -7.583 2.231 L -11.42 1.573 L -11.439 1.216 z M 7.583 2.231 L 7.583 -2.231 L 10.581 -1.72 L 10.705 -0.68 L 10.844 -0.064 L 11.12 0.708 L 11.277 0.995 L 11.44 1.202 L 11.42 1.573 z M 13.238 -0.188 L 13.238 0.188 L 13.145 0.552 L 12.963 0.882 L 12.704 1.158 L 12.147 1.47 L 12.036 1.129 L 12.144 0.889 L 12.227 0.572 L 12.308 -0.244 L 12.262 -1.057 L 12.578 -1.283 L 12.962 -0.883 L 13.145 -0.552 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.482 -0.842 L -12.483 0.208 L -12.396 0.737 L -12.269 1.077 L -12.344 1.15 L -12.639 0.946 L -12.847 0.696 L -12.985 0.402 L -13.046 0.078 L -13.039 -0.16 L -12.958 -0.478 L -12.8 -0.763 L -12.553 -1.016 L -12.482 -0.967 L -12.482 -0.842 L -12.482 -0.842 L -12.482 -0.842 L -12.482 -0.842 M -10.496 -0.75 L -10.473 -0.848 L -10.398 -1.548 L -7.783 -1.994 L -7.783 1.994 L -11.229 1.403 L -11.236 1.271 L -10.992 0.903 L -10.737 0.279 L -10.544 -0.545 L -10.496 -0.75 L -10.496 -0.75 L -10.496 -0.75 L -10.496 -0.75 M 7.783 1.064 L 7.783 -1.994 L 10.4 -1.548 L 10.508 -0.646 L 10.652 -0.008 L 10.937 0.79 L 11.11 1.106 L 11.236 1.267 L 11.229 1.403 L 7.783 1.994 L 7.783 1.275 L 7.783 1.064 L 7.783 1.064 L 7.783 1.064 L 7.783 1.064 M 12.334 0.953 L 12.424 0.607 L 12.509 -0.24 L 12.468 -0.958 L 12.554 -1.019 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.8 0.763 L 12.577 1.001 L 12.26 1.191 L 12.248 1.146 L 12.333 0.956 L 12.334 0.953 L 12.334 0.953 L 12.334 0.953 L 12.334 0.953' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -10.159 -1.155 L -9.978 -1.336 L -9.296 -1.452 L -10.273 -0.475 L -10.446 0.263 L -8.614 -1.568 L -8.107 -1.509 L -10.743 1.126 L -10.325 1.274 L -8.063 -0.988 L -8.063 -0.422 L -9.842 1.357 L -9.359 1.439 L -8.063 0.143 L -8.063 0.709 L -8.876 1.522 L -8.393 1.605 L -8.063 1.275 L -8.063 1.275 L -8.063 1.275 L -8.063 1.275 M 9.844 -1.359 L 8.063 0.422 L 8.063 -0.143 L 9.361 -1.441 L 8.877 -1.523 L 8.063 -0.709 L 8.063 -1.275 L 8.394 -1.606 L 8.394 -1.606 L 8.394 -1.606 L 8.394 -1.606 M 10.169 -1.118 L 8.063 0.988 L 8.108 1.509 L 10.23 -0.613 L 10.332 -0.15 L 8.615 1.567 L 9.298 1.45 L 10.46 0.288 L 10.609 0.705 L 9.981 1.333 L 10.664 1.216 L 10.73 1.15 L 10.73 1.15 L 10.73 1.15 L 10.73 1.15' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:3.6' inkscape:groupmode='layer' inkscape:label='Layer 16, z:3.6' transform='translate(280.0, 1530.714)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate3.6' fill='#000' stroke='none' y='15' >Layer 16, z:3.6</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.554 -1.266 L -12.233 -1.069 L -12.173 -0.157 L -12.036 0.367 L -11.961 0.518 L -11.877 0.632 L -11.784 0.705 L -11.686 0.738 L -11.582 0.73 L -11.474 0.681 L -11.365 0.591 L -11.256 0.463 L -11.045 0.097 L -10.81 -0.531 L -10.563 -1.723 L -8.045 -2.152 L -8.045 2.152 L -12.123 1.453 L -12.392 1.356 L -12.706 1.156 L -12.963 0.882 L -13.145 0.552 L -13.238 0.188 L -13.25 -0.0 L -13.203 -0.373 z M 13.203 -0.373 L 13.25 0.0 L 13.203 0.373 L 13.065 0.723 L 12.844 1.027 L 12.544 1.272 L 12.389 1.357 L 12.123 1.453 L 8.045 2.152 L 8.045 -2.152 L 10.563 -1.723 L 10.853 -0.393 L 11.202 0.384 L 11.365 0.591 L 11.528 0.711 L 11.634 0.74 L 11.736 0.727 L 11.831 0.674 L 11.961 0.518 L 12.069 0.278 L 12.152 -0.039 L 12.219 -0.56 L 12.221 -1.063 L 12.492 -1.333 L 12.844 -1.028 L 13.065 -0.723 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.753 -0.812 L -12.697 -0.889 L -12.537 -1.021 L -12.426 -0.953 L -12.371 -0.125 L -12.224 0.438 L -12.132 0.623 L -12.022 0.773 L -11.88 0.884 L -11.711 0.941 L -11.531 0.927 L -11.367 0.852 L -11.224 0.734 L -11.092 0.579 L -10.863 0.183 L -10.617 -0.475 L -10.395 -1.549 L -8.245 -1.915 L -8.245 1.915 L -12.072 1.259 L -12.303 1.175 L -12.577 1.001 L -12.8 0.763 L -12.958 0.478 L -13.04 0.157 L -13.049 0.006 L -13.008 -0.323 L -12.888 -0.626 L -12.753 -0.812 L -12.753 -0.812 L -12.753 -0.812 L -12.753 -0.812 M 8.245 1.311 L 8.245 1.216 L 8.245 -1.915 L 10.396 -1.549 L 10.662 -0.33 L 11.03 0.488 L 11.225 0.736 L 11.439 0.894 L 11.62 0.943 L 11.8 0.921 L 11.961 0.831 L 12.132 0.625 L 12.258 0.345 L 12.349 -0.001 L 12.419 -0.547 L 12.42 -0.98 L 12.501 -1.06 L 12.695 -0.892 L 12.888 -0.626 L 13.008 -0.323 L 13.048 0.0 L 13.008 0.323 L 12.888 0.626 L 12.697 0.888 L 12.432 1.105 L 12.306 1.174 L 12.072 1.259 L 8.245 1.915 L 8.245 1.311 L 8.245 1.311 L 8.245 1.311 L 8.245 1.311' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.493 0.518 L -12.715 0.296 L -12.658 -0.213 L -12.719 -0.274 L -12.719 -0.274 L -12.719 -0.274 L -12.719 -0.274 M -8.877 -1.523 L -8.525 -1.171 L -8.525 -0.605 L -9.361 -1.441 L -9.844 -1.359 L -8.525 -0.04 L -8.525 0.526 L -10.193 -1.142 L -10.29 -0.674 L -8.525 1.092 L -8.669 1.514 L -10.411 -0.228 L -10.565 0.183 L -9.298 1.45 L -9.98 1.333 L -10.756 0.557 L -10.994 0.886 L -10.663 1.216 L -10.663 1.216 L -10.663 1.216 L -10.663 1.216 M 8.525 0.04 L 9.842 1.357 L 9.359 1.44 L 8.525 0.605 L 8.525 1.171 L 8.876 1.522 L 8.876 1.522 L 8.876 1.522 L 8.876 1.522 M 8.525 -0.526 L 10.325 1.274 L 10.808 1.191 L 8.525 -1.092 L 8.668 -1.514 L 10.765 0.583 L 10.765 0.583 L 10.765 0.583 L 10.765 0.583 M 10.364 -0.384 L 9.296 -1.452 L 9.978 -1.336 L 10.206 -1.108 L 10.206 -1.108 L 10.206 -1.108 L 10.206 -1.108 M 12.459 0.58 L 12.527 0.647 L 12.724 0.279 L 12.598 0.153 L 12.719 -0.292 L 12.7 -0.31 L 12.7 -0.31 L 12.7 -0.31 L 12.7 -0.31' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:3.8' inkscape:groupmode='layer' inkscape:label='Layer 17, z:3.8' transform='translate(280.0, 1618.55)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate3.8' fill='#000' stroke='none' y='15' >Layer 17, z:3.8</text>
+			<path d='M -13.017 -0.804 L -12.777 -1.093 L -12.593 -1.227 L -12.21 -1.37 L -12.119 -1.068 L -12.077 -0.65 L -11.994 -0.333 L -11.886 -0.093 L -11.802 0.021 L -11.661 0.116 L -11.559 0.129 L -11.399 0.07 L -11.29 -0.02 L -11.127 -0.227 L -10.97 -0.514 L -10.694 -1.286 L -10.591 -1.719 L -8.508 -2.073 L -8.508 2.073 L -12.123 1.453 L -12.474 1.314 L -12.768 1.101 L -13.01 0.813 L -13.173 0.475 L -13.246 0.106 L -13.247 -0.094 L -13.177 -0.464 z M 13.145 -0.552 L 13.238 -0.188 L 13.238 0.188 L 13.145 0.552 L 12.963 0.882 L 12.706 1.156 L 12.389 1.357 L 12.123 1.453 L 8.508 2.073 L 8.508 -2.073 L 10.591 -1.719 L 10.824 -0.871 L 11.021 -0.41 L 11.236 -0.079 L 11.399 0.07 L 11.507 0.119 L 11.611 0.128 L 11.709 0.094 L 11.802 0.021 L 11.924 -0.164 L 12.051 -0.535 L 12.154 -1.242 L 12.399 -1.362 L 12.703 -1.159 L 12.963 -0.882 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.879 -0.628 L -12.847 -0.696 L -12.639 -0.946 L -12.311 -1.186 L -12.32 -1.065 L -12.274 -0.614 L -12.183 -0.266 L -12.06 0.008 L -11.942 0.168 L -11.733 0.308 L -11.536 0.334 L -11.298 0.246 L -11.146 0.121 L -10.96 -0.116 L -10.787 -0.432 L -10.502 -1.229 L -10.427 -1.544 L -8.708 -1.836 L -8.708 1.836 L -12.069 1.259 L -12.377 1.137 L -12.631 0.953 L -12.841 0.704 L -12.982 0.411 L -13.046 0.086 L -13.047 -0.076 L -12.985 -0.402 L -12.879 -0.628 L -12.879 -0.628 L -12.879 -0.628 L -12.879 -0.628 M 8.712 1.835 L 8.708 1.836 L 8.708 1.44 L 8.708 -1.836 L 10.432 -1.543 L 10.635 -0.805 L 10.844 -0.316 L 11.082 0.051 L 11.287 0.239 L 11.456 0.315 L 11.636 0.331 L 11.806 0.272 L 11.951 0.158 L 12.105 -0.075 L 12.247 -0.487 L 12.337 -1.109 L 12.383 -1.132 L 12.573 -1.005 L 12.8 -0.763 L 12.958 -0.478 L 13.038 -0.163 L 13.038 0.163 L 12.958 0.478 L 12.8 0.763 L 12.577 1.001 L 12.3 1.176 L 12.072 1.259 L 8.712 1.835 L 8.712 1.835 L 8.712 1.835 L 8.712 1.835' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -10.808 1.191 L -8.988 -0.629 L -8.988 -1.194 L -11.291 1.109 L -11.774 1.026 L -11.289 0.541 L -11.869 0.555 L -12.214 0.901 L -12.524 0.645 L -12.187 0.308 L -12.383 -0.062 L -12.723 0.278 L -12.72 -0.291 L -12.629 -0.382 L -12.629 -0.382 L -12.629 -0.382 L -12.629 -0.382 M -10.651 -0.097 L -9.296 -1.452 L -9.977 -1.336 L -10.306 -1.007 L -10.306 -1.007 L -10.306 -1.007 L -10.306 -1.007 M -8.988 -0.063 L -10.325 1.274 L -9.842 1.357 L -8.988 0.503 L -8.988 1.068 L -9.36 1.44 L -9.36 1.44 L -9.36 1.44 L -9.36 1.44 M 8.988 -1.068 L 9.361 -1.441 L 9.844 -1.359 L 8.988 -0.503 L 8.988 0.063 L 10.239 -1.188 L 10.361 -0.744 L 8.988 0.629 L 8.988 1.194 L 10.527 -0.345 L 10.728 0.02 L 9.297 1.451 L 9.98 1.333 L 10.978 0.336 L 11.319 0.561 L 10.663 1.216 L 11.346 1.099 L 11.914 0.531 L 12.037 0.974 L 12.715 0.296 L 12.286 0.159 L 12.72 -0.275 L 12.72 -0.275 L 12.72 -0.275 L 12.72 -0.275' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:4.0' inkscape:groupmode='layer' inkscape:label='Layer 18, z:4.0' transform='translate(280.0, 1706.386)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate4.0' fill='#000' stroke='none' y='15' >Layer 18, z:4.0</text>
+			<path d='M -13.065 -0.723 L -12.844 -1.027 L -12.554 -1.266 L -12.213 -1.427 L -11.962 -1.163 L -11.886 -0.855 L -11.811 -0.704 L -11.727 -0.59 L -11.634 -0.516 L -11.536 -0.483 L -11.432 -0.492 L -11.324 -0.541 L -11.215 -0.631 L -11.106 -0.759 L -10.946 -1.021 L -10.675 -1.704 L -8.901 -2.006 L -8.901 2.006 L -12.302 1.395 L -12.632 1.214 L -12.906 0.956 L -13.107 0.639 L -13.223 0.281 L -13.25 -0.0 L -13.203 -0.373 z M 13.223 -0.281 L 13.247 0.094 L 13.177 0.464 L 13.017 0.804 L 12.777 1.093 L 12.473 1.314 L 12.123 1.453 L 8.901 2.006 L 8.901 -2.006 L 10.675 -1.704 L 10.838 -1.252 L 11.106 -0.759 L 11.27 -0.581 L 11.378 -0.511 L 11.484 -0.482 L 11.586 -0.495 L 11.681 -0.548 L 11.77 -0.642 L 11.886 -0.855 L 11.977 -1.147 L 12.321 -1.409 L 12.775 -1.095 L 12.906 -0.956 L 13.107 -0.639 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.624 -0.949 L -12.446 -1.096 L -12.258 -1.185 L -12.143 -1.064 L -12.075 -0.786 L -11.982 -0.599 L -11.872 -0.45 L -11.731 -0.338 L -11.56 -0.28 L -11.381 -0.296 L -11.217 -0.37 L -11.074 -0.488 L -10.944 -0.641 L -10.766 -0.931 L -10.531 -1.526 L -9.101 -1.769 L -9.101 1.767 L -12.234 1.204 L -12.513 1.051 L -12.751 0.828 L -12.925 0.553 L -13.026 0.24 L -13.049 0.003 L -13.008 -0.323 L -12.888 -0.626 L -12.697 -0.889 L -12.624 -0.949 L -12.624 -0.949 L -12.624 -0.949 L -12.624 -0.949 M 9.101 -1.453 L 9.101 -1.769 L 10.526 -1.526 L 10.655 -1.17 L 10.942 -0.642 L 11.14 -0.427 L 11.295 -0.326 L 11.47 -0.279 L 11.65 -0.301 L 11.805 -0.388 L 11.933 -0.523 L 12.071 -0.777 L 12.149 -1.027 L 12.326 -1.162 L 12.644 -0.942 L 12.747 -0.833 L 12.925 -0.553 L 13.025 -0.243 L 13.046 0.082 L 12.985 0.402 L 12.847 0.696 L 12.639 0.946 L 12.376 1.137 L 12.069 1.259 L 9.101 1.769 L 9.101 -1.359 L 9.101 -1.453 L 9.101 -1.453 L 9.101 -1.453 L 9.101 -1.453' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -10.681 1.199 L -12.52 -0.641 L -12.724 -0.279 L -11.37 1.075 L -12.06 0.951 L -12.713 0.298 L -12.713 0.298 L -12.713 0.298 L -12.713 0.298 M -10.489 -0.872 L -9.381 0.236 L -9.381 0.801 L -10.694 -0.512 L -10.964 -0.216 L -9.448 1.3 L -9.991 1.322 L -11.333 -0.019 L -11.333 -0.019 L -11.333 -0.019 L -11.333 -0.019 M -10.327 -1.276 L -9.381 -0.33 L -9.381 -0.896 L -9.844 -1.359 L -9.844 -1.359 L -9.844 -1.359 L -9.844 -1.359 M 10.593 -0.721 L 9.978 -1.336 L 9.978 -1.336 L 9.978 -1.336 L 9.978 -1.336 M 9.381 0.896 L 9.843 1.357 L 10.325 1.274 L 9.381 0.33 L 9.381 -0.236 L 10.808 1.192 L 11.291 1.109 L 9.381 -0.801 L 9.446 -1.302 L 11.774 1.026 L 12.214 0.9 L 11.271 -0.043 L 11.809 -0.07 L 12.525 0.645 L 12.724 0.279 L 12.126 -0.319 L 12.329 -0.682 L 12.713 -0.298 L 12.713 -0.298 L 12.713 -0.298 L 12.713 -0.298' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+		<g id='z:4.2' inkscape:groupmode='layer' inkscape:label='Layer 19, z:4.2' transform='translate(280.0, 1794.222)'>
+<!--id='layerTextTemplate' must be there so that the text could be removed if necessary-->
+			<text id='layerTextTemplate4.2' fill='#000' stroke='none' y='15' >Layer 19, z:4.2</text>
+			<path d='M -12.906 -0.956 L -12.632 -1.214 L -12.302 -1.395 L -11.826 -1.508 L -11.695 -1.253 L -11.606 -1.159 L -11.511 -1.106 L -11.409 -1.093 L -11.303 -1.122 L -11.195 -1.192 L -10.977 -1.449 L -10.85 -1.674 L -9.294 -1.939 L -9.294 1.939 L -12.123 1.453 L -12.389 1.357 L -12.554 1.266 L -12.842 1.028 L -13.063 0.725 L -13.202 0.375 L -13.25 0.002 L -13.223 -0.281 L -13.107 -0.639 z M 13.203 -0.373 L 13.25 0.0 L 13.203 0.373 L 13.065 0.723 L 12.844 1.027 L 12.552 1.267 L 12.383 1.36 L 12.118 1.454 L 9.294 1.939 L 9.294 -1.939 L 10.85 -1.674 L 10.977 -1.449 L 11.195 -1.192 L 11.303 -1.122 L 11.409 -1.093 L 11.511 -1.106 L 11.606 -1.159 L 11.695 -1.253 L 11.826 -1.508 L 12.304 -1.394 L 12.634 -1.212 L 12.844 -1.027 L 13.065 -0.723 z' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -12.864 -0.649 L -12.751 -0.828 L -12.513 -1.051 L -12.23 -1.207 L -11.932 -1.277 L -11.86 -1.136 L -11.73 -0.999 L -11.575 -0.912 L -11.395 -0.89 L -11.22 -0.937 L -11.062 -1.04 L -10.812 -1.334 L -10.723 -1.493 L -9.494 -1.702 L -9.494 1.702 L -12.072 1.259 L -12.441 1.1 L -12.695 0.89 L -12.886 0.628 L -13.007 0.325 L -13.049 -0.001 L -13.026 -0.24 L -12.925 -0.553 L -12.864 -0.649 L -12.864 -0.649 L -12.864 -0.649 L -12.864 -0.649 M 9.494 -0.688 L 9.494 -0.899 L 9.494 -1.702 L 10.723 -1.493 L 10.812 -1.334 L 11.062 -1.04 L 11.22 -0.937 L 11.395 -0.89 L 11.575 -0.912 L 11.73 -0.999 L 11.86 -1.136 L 11.932 -1.277 L 12.231 -1.206 L 12.518 -1.047 L 12.695 -0.892 L 12.888 -0.626 L 13.008 -0.323 L 13.048 0.0 L 13.008 0.323 L 12.888 0.626 L 12.697 0.889 L 12.439 1.101 L 12.301 1.177 L 12.067 1.26 L 9.494 1.702 L 9.494 -0.688 L 9.494 -0.688 L 9.494 -0.688 L 9.494 -0.688' fill='none' stroke='#f00' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+			<path d='M -9.774 0.723 L -10.326 1.275 L -10.808 1.192 L -9.774 0.157 L -9.774 -0.408 L -11.291 1.109 L -11.774 1.026 L -9.774 -0.974 L -9.978 -1.336 L -12.209 0.895 L -12.526 0.647 L -11.237 -0.642 L -11.753 -0.692 L -12.724 0.279 L -12.713 -0.298 L -12.112 -0.899 L -12.112 -0.899 L -12.112 -0.899 L -12.112 -0.899 M 9.774 -0.723 L 10.327 -1.276 L 10.683 -1.066 L 9.774 -0.157 L 9.774 0.408 L 10.957 -0.774 L 11.357 -0.609 L 9.774 0.974 L 9.979 1.334 L 12.211 -0.897 L 12.527 -0.647 L 10.662 1.217 L 11.345 1.1 L 12.724 -0.279 L 12.719 0.292 L 12.042 0.969 L 12.042 0.969 L 12.042 0.969 L 12.042 0.969' fill='none' stroke='#f5c' transform='scale(3.7, -3.7) translate(15.871, 6.121)' />
+		</g>
+	</g>
+<!--End Layer Data-->
+<!--beginningOfControlSection='true' must be there or else the control boxes will be carved-->
+	<g id='controls' beginningOfControlSection='true' inkscape:groupmode='layer' inkscape:label='Controls'>
+<!--id='isoControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='isoControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<circle id='globe' cx='120' cy='120' fill='gray' r='100' />
+			<circle id='cover' cx='120' cy='120' fill='silver' r='33' />
+			<circle id='observer' fill='darkslateblue' r='12' />
+			<text id='latitudeIso' x='20' y='260' >Latitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude-1.0)' x='198' y='260' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLatitude(globalLatitude+1.0)' x='213' y='260' >&gt;</text>
+			<text id='longitudeIso' x='20' y='280' >Longitude</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude-1.0)' x='198' y='280' >&lt;</text>
+			<text fill='darkslateblue' onclick='displayIsoByLongitude(globalLongitude+1.0)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleIso' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleIso(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXIso' y='20' >X: -15.871 mm</text>
+				<text id='minYIso' y='40' >Y: -6.121 mm</text>
+				<text id='minZIso' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXIso' y='20' >X: 15.861 mm</text>
+				<text id='maxYIso' y='40' >Y: 6.132 mm</text>
+				<text id='maxZIso' y='60' >Z: 4.3 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXIso' y='20' >X: 31.732 mm</text>
+				<text id='dimYIso' y='40' >Y: 12.253 mm</text>
+				<text id='dimZIso' y='60' >Z: 4.0 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightIso' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersIso' y='40' >Number of Layers: 20</text>
+				<text id='volumeIso' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='layerControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='layerControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='hidden'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+<!--<path stroke='#000' stroke-width='3' d='M 20 20 h5 l-5 -10 l-5 10 h5 v35 h35 v-5 l10 5 l-10 5 v-5 h-35 z'/>-->
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text id='minIndexLayer' x='20' y='245' >0</text>
+			<rect id='slider' fill='gray' height='24' width='170' x='32' y='230' />
+			<circle id='thumb' cx='42' cy='242' fill='darkslateblue' r='12' />
+			<text id='maxIndexLayer' x='203' y='245' >1</text>
+			<text id='currentIndexLayer' x='20' y='280' >Layer</text>
+			<text id='decreaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex-1)' x='198' y='280' >&lt;</text>
+			<text id='increaseLayerIndex' fill='darkslateblue' onclick='displayLayer(globalLayerIndex+1)' x='213' y='280' >&gt;</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleLayer' x='65' y='300' >1</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleLayer(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXLayer' y='20' >X: -15.871 mm</text>
+				<text id='minYLayer' y='40' >Y: -6.121 mm</text>
+				<text id='minZLayer' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXLayer' y='20' >X: 15.861 mm</text>
+				<text id='maxYLayer' y='40' >Y: 6.132 mm</text>
+				<text id='maxZLayer' y='60' >Z: 4.3 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXLayer' y='20' >X: 31.732 mm</text>
+				<text id='dimYLayer' y='40' >Y: 12.253 mm</text>
+				<text id='dimZLayer' y='60' >Z: 4.0 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightLayer' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersLayer' y='40' >Number of Layers: 20</text>
+				<text id='volumeLayer' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+<!--id='scrollControlBox' must be there so that the controls could be removed if necessary-->
+		<g id='scrollControlBox' fill='#000' font-family='Arial' font-size='15px' font-weight='bold' transform='translate(20, 60)' visibility='visible'>
+			<rect fill='silver' height='720' stroke='gray' stroke-width='4px' width='240' />
+			<path d='M 66 164 h76 v6 l18 -9 l-18 -9 v6 h-70 v-70 h6 l-9 -18 l-9 18 h6 z' stroke-width='0' />
+			<text text-anchor='middle' x='68' y='64' >Y</text>
+			<text x='165' y='166' >X</text>
+			<text x='20' y='300' >Scale</text>
+			<text id='scaleScroll' x='65' y='300' >: 1</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale/2)' x='198' y='300' >&lt;</text>
+			<text fill='darkslateblue' onclick='changeScaleScroll(globalZoomScale*2)' x='213' y='300' >&gt;</text>
+			<g transform='translate(20, 340)'>
+				<text >Min</text>
+				<text id='minXScroll' y='20' >X: -15.871 mm</text>
+				<text id='minYScroll' y='40' >Y: -6.121 mm</text>
+				<text id='minZScroll' y='60' >Z: 0.3 mm</text>
+			</g>
+			<g transform='translate(20, 440)'>
+				<text >Max</text>
+				<text id='maxXScroll' y='20' >X: 15.861 mm</text>
+				<text id='maxYScroll' y='40' >Y: 6.132 mm</text>
+				<text id='maxZScroll' y='60' >Z: 4.3 mm</text>
+			</g>
+			<g transform='translate(20, 540)'>
+				<text >Dimension</text>
+				<text id='dimXScroll' y='20' >X: 31.732 mm</text>
+				<text id='dimYScroll' y='40' >Y: 12.253 mm</text>
+				<text id='dimZScroll' y='60' >Z: 4.0 mm</text>
+			</g>
+			<g transform='translate(20, 640)'>
+				<text >Statistics</text>
+				<text id='layerHeightScroll' y='20' >Layer Height: 0.2 mm</text>
+				<text id='numberOfLayersScroll' y='40' >Number of Layers: 20</text>
+				<text id='volumeScroll' y='60' >Volume: 0.0 cm3</text>
+			</g>
+		</g>
+		<text id='isoViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewIso()' text-anchor='middle' visibility='visible' x='80' y='30' >[Iso View]</text>
+		<text id='isoViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='76' y='30' >Iso View</text>
+		<text id='layerViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewLayer()' text-anchor='middle' visibility='visible' x='240' y='30' >[Layer View]</text>
+		<text id='layerViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='hidden' x='236' y='30' >Layer View</text>
+		<text id='scrollViewButton' fill='darkslateblue' font-size='18px' font-weight='normal' onclick='viewScroll()' text-anchor='middle' visibility='hidden' x='400' y='30' >[Scroll View]</text>
+		<text id='scrollViewLabel' fill='darkslateblue' font-size='24px' font-weight='bold' text-anchor='middle' visibility='visible' x='396' y='30' >Scroll View</text>
+	</g>
+</svg>
