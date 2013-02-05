@@ -1,10 +1,10 @@
-$fn=50;
+$fn=100;
 
 layer_thickness = 0.20;
 width_in_studs = 3;
 length_in_studs = 14;
 
-
+main_hole_diam = 13.2;
 
 brick_height = 9.64;
 brick_width = 7.96;
@@ -44,12 +44,12 @@ module tooth() {
 }
 
 for (i = [0:20]) {
-   rotate([90,0,i*360/20]) translate([0,0,(12.9/2) + tooth_height]) tooth();
+   rotate([90,0,i*360/20]) translate([0,0,(main_hole_diam/2) + tooth_height]) tooth();
 }
 
 difference() {
-  translate([0,0,(brick_width * width_in_studs)/2]) cylinder(r=12.9/2 + tooth_height*2, h=(brick_width * width_in_studs), center=true);
-  translate([0,0,(brick_width * width_in_studs)/2]) cylinder(r=12.9/2 + tooth_height, h=(brick_width * width_in_studs) + 1, center=true);
+  translate([0,0,(brick_width * width_in_studs)/2]) cylinder(r=main_hole_diam/2 + tooth_height*2, h=(brick_width * width_in_studs), center=true);
+  translate([0,0,(brick_width * width_in_studs)/2]) cylinder(r=main_hole_diam/2 + tooth_height, h=(brick_width * width_in_studs) + 1, center=true);
 }
 
 color("Red")

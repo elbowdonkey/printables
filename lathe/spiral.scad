@@ -12,56 +12,53 @@ jaw_diam = 85.63;
 rearplate_diam = 80;
 scrollbk_diam = 71.635;
 
-module tooth() {
+module tooth(number=1) {
   gap_distance = 2.5;
   screw_start = 14;
   difference() {
     translate([0, 0, 1])
     union() {
       translate([0,20,6]) color("Green") cube(size=[10, 40, 8], center=true);
-      translate([-5.99,25,8]) color("Green") cube(size=[2, 30, 4], center=true);
-      translate([5.99,25,8]) color("Green") cube(size=[2, 30, 4], center=true);
+      translate([-5.99,25,8.25]) color("Green") cube(size=[2, 30, 3.5], center=true);
+      translate([5.99,25,8.25]) color("Green") cube(size=[2, 30, 3.5], center=true);
     }
 
     // center tip
     translate([0,8,15]) cylinder(r=1, h=40, center=true);
 
-
-    for ( i = [-2 : 7] ) {
-      hull() {
-        translate([-4.5,18 + (i * gap_distance),10]) cylinder(r=0.5, h=4, center=true);
-        translate([4.5, 18 + (i * gap_distance),10]) cylinder(r=0.5, h=4, center=true);
-      }
-    }
-
     // screw holes
-
     for ( i = [0 : 2] ) {
       translate([0,(screw_start + (i * 10)),10]) cylinder(r=1.5, h=10, center=true);
     }
-
-    // for ( i = [-2 : 2] ) {
-    //   hull() {
-    //     translate([(i * gap_distance),17,10]) cylinder(r=0.5, h=5, center=true);
-    //     translate([(i * gap_distance),21,10]) cylinder(r=0.5, h=5, center=true);
-    //   }
-
-    //   hull() {
-    //     translate([(i * gap_distance),27,10]) cylinder(r=0.5, h=5, center=true);
-    //     translate([(i * gap_distance),31,10]) cylinder(r=0.5, h=5, center=true);
-    //   }
-    // }
-
-    translate([0,24,9]) rotate([90,0,0]) cylinder(r=0.5, h=28, center=true);
-    translate([0,24,7]) rotate([90,0,0]) cylinder(r=0.5, h=28, center=true);
-    translate([0,24,5]) rotate([90,0,0]) cylinder(r=0.5, h=28, center=true);
 
     // chamfers
     color("LightSeaGreen") translate([-4.15,4.7,7]) rotate([0,0,240]) cube(size=[10, 20, 10], center=true);
     color("LightSeaGreen") translate([ 4.15,4.7,7]) rotate([0,0,-240]) cube(size=[10, 20, 10], center=true);
     color("LightSeaGreen") translate([4.15, 45,7]) rotate([0,0,240]) cube(size=[10, 20, 10], center=true);
     color("LightSeaGreen") translate([-4.15,45,7]) rotate([0,0,-240]) cube(size=[10, 20, 10], center=true);
+
+    // for ( i = [0 : 21] ) {
+    //   color("Aqua") translate([0,14.2 + i,11.3]) rotate([45,0,0]) cube(size=[20, 1, 1], center=true);
+    // }
+
+    // ID
+    if (number == 1) {
+      translate([0,18,11.2]) cylinder(r=0.5, h=1, center=true);
+    }
+
+    if (number == 2) {
+      translate([0,18,11.2]) cylinder(r=0.5, h=1, center=true);
+      translate([-1.5,18,11.2]) cylinder(r=0.5, h=1, center=true);
+    }
+
+    if (number == 3) {
+      translate([1.5,18,11.2]) cylinder(r=0.5, h=1, center=true);
+      translate([0,18,11.2]) cylinder(r=0.5, h=1, center=true);
+      translate([-1.5,18,11.2]) cylinder(r=0.5, h=1, center=true);
+    }
   }
+
+
 
   // screw holes
   screw_start = 14;
@@ -74,26 +71,48 @@ module tooth() {
     }
   }
 
-  ridge_distance = 2.86;
+  ridge_spacing = 2.86;
+  ridge_offset1 = 0.65;
+  ridge_offset2 = 0.2;
+  ridge_offset3 = -1;
 
-  translate([0,-1.2,0]) {
-    for ( i = [-6 : 2] ) {
-      translate([0,(ridge_distance*i),0]) ridge();
+  color1 = "Aqua";
+  color2 = "Red";
+  color3 = "Pink";
+
+  translate([0,0,0]) {
+    for ( i = [-7 : 2] ) {
+      if (number == 1) {
+        color(color1) translate([0,ridge_offset1+(ridge_spacing*i),0]) round_ridge();
+      }
+      if (number == 2) {
+        color(color2) translate([0,ridge_offset2+(ridge_spacing*i),0]) round_ridge();
+      }
+      if (number == 3) {
+        color(color3) translate([0,ridge_offset3+(ridge_spacing*i),0]) round_ridge();
+      }
     }
   }
 }
 
+module round_ridge() {
+  // translate([3.75,32.4,2.25]) cylinder(r=0.5, h=2, center=true);
+  scale([7,1,1]) translate([0,32.7,2.25]) cylinder(r=0.4, h=2, center=true);
+  // translate([-3.75,32.4,2.25]) cylinder(r=0.5, h=2, center=true);
+}
+
 module ridge() {
+  color("Yellow")
     difference () {
       translate([0,-6,2.25]) cylinder(r=40, h=2, center=true);
       translate([0,-6,2.25]) cylinder(r=39.40, h=3, center=true);
       translate([ -35,25,5]) color("Orange") cube(size= [60, 200, 20], center=true);
       translate([35,25,5]) color("Orange") cube(size=[60, 200, 20], center=true);
       translate([0,-30,0]) color("Orange") cube(size= [60, 60, 60], center=true);
-      color("Coral") translate([-5,32.7,2.25]) rotate([0,0,-20]) cube(size=[5, 1, 4], center=true);
-      color("Coral") translate([5,32.7,2.25]) rotate([0,0,20]) cube(size=[5, 1, 4], center=true);
-      color("Coral") translate([-5,34.1,2.25]) rotate([0,0,20]) cube(size=[5, 1, 4], center=true);
-      color("Coral") translate([5,34.1,2.25]) rotate([0,0,-20]) cube(size=[5, 1, 4], center=true);
+      translate([-5,32.7,2.25]) rotate([0,0,-20]) cube(size=[5, 1, 4], center=true);
+      translate([5,32.7,2.25]) rotate([0,0,20]) cube(size=[5, 1, 4], center=true);
+      translate([-5,34.1,2.25]) rotate([0,0,20]) cube(size=[5, 1, 4], center=true);
+      translate([5,34.1,2.25]) rotate([0,0,-20]) cube(size=[5, 1, 4], center=true);
     }
 
 }
@@ -186,9 +205,9 @@ module front() {
       rotate(i * 360 / 3, [0,0,1])
       color("Green")
       union() {
-        translate([0,25,6])       cube(size=[10.05,40, 20], center=true);
-        translate([-5.99,27.5,7]) cube(size=[2.05, 40, 4.05], center=true);
-        translate([5.99,27.5,7])  cube(size=[2.05, 40, 4.05], center=true);
+        translate([0,25,6])       cube(size=[10.3,40, 20], center=true);
+        translate([-5.99,27.5,7]) cube(size=[2.2, 40, 4.2], center=true);
+        translate([5.99,27.5,7])  cube(size=[2.2, 40, 4.2], center=true);
       }
     }
 
@@ -234,40 +253,48 @@ module gears() {
     }
     // screw holes
     for ( i = [0 : 13] ) {
-      rotate(i * 360 / 12 , [0, 0, 1]) translate([25,0,-18]) cap_bolt(4,80); //cylinder(r=1.5, h=80, center=true);
+      rotate(i * 360 / 12 , [0, 0, 1]) translate([25,0,-20]) cap_bolt(2.8,80); //cylinder(r=1.5, h=80, center=true);
     }
   }
 }
+// render() {
+//   rotate([180,0,0]) translate([0,0,-3.6]) import("v3/scrollback5.stl");
+// }
 
 // render() {
-// difference() {
-  // color("Aqua") translate([0,0,-3.6]) import("v3/scrollback5.stl");
-//   translate([30,0,0]) cube(size=[60, 100, 30], center=true);
-// }
-// }
-
-
-// for ( i = [0 : 2] ) {
-//   rotate(i * 360 / 3 , [0, 0, 1])
-difference() {
-  translate([0,4,0]) tooth();
-  //translate([-10,30,4]) cube(size=[20, 60, 20], center=true);
-
-}
+  translate([0,0,-2])
+  for ( i = [1 : 3] ) {
+    rotate(i * 360 / 3 , [0, 0, 1])
+    // difference() {
+      //
+      translate([0,-7,0]) tooth(number=i);
+      echo(i);
+    //   translate([-10,30,4]) cube(size=[20, 60, 20], center=true);
+    // }
+  }
+//}
 
 
 
-// }
 
-
-
-//translate([0,33.5,0]) color("red") cube(size=[0.94, 0.94, 0.94], center=true);
 // difference() {
 //   union() {
-    //color("SlateGrey") front();
-//     color("Orange") gears();
+//     color("SlateGrey") front();
+//     //translate([0,-7,-2]) tooth(number=1);
+//     // difference() {
+//     //   rotate([0,0,31]) color("Orange") gears();
+//     //   translate([0,0,0]) cylinder(r=20, h=40, center=true);
+//     // }
+
+
 //   }
 //   color("Red") translate([0,-37,-15.22]) rotate([90,0,0]) cylinder(r=2, h=10, center=true);
-//}
+//   // translate([0,-35,0]) color("red") cube(size=[100,100,100], center=true);
+// }
+
+
+// gear_scale = 0.31;
+// translate([0,-6,0]) scale([1,0.8,1]) rotate([0,0,180]) translate([0,0,-27.5]) scale([gear_scale,gear_scale,gear_scale]) import("v3/fullsize_gear.stl");
+
 
 
