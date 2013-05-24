@@ -42,7 +42,6 @@ module bobbin2() {
       rotate([90,0,0]) cylinder(r=10, h=60, center=true, $fn=180);
       translate([0,32.5, 0]) rotate([90,0,0]) cylinder(r1=15, r2=10, h=5, center=true, $fn=180);
       translate([0,37.5, 0]) rotate([90,0,0]) cylinder(r=15, h=5, center=true, $fn=180);
-      // translate([0,37.5, 0]) rotate([90,0,0]) cylinder(r1=10, r2=15, h=5, center=true, $fn=100);
     }
 
     translate([0,-21,0]) rotate([90,0,0]) cylinder(r=shaft_diam/2, h=20, center=true, $fn=100);
